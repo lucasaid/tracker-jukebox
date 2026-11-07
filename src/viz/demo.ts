@@ -95,12 +95,44 @@ interface Star {
   z: number
   /** picks the channel this star follows: group % channel count */
   group: number
+  /** projected position this frame; visible = on screen */
+  px: number
+  py: number
+  visible: boolean
+}
+
+interface Planet {
+  x: number
+  y: number
+  z: number
+  /** world-space radius */
+  r: number
+  group: number
+  /** plain-mode body colour */
+  body: string
+  /** ring tilt in radians, or null for no ring */
+  ring: number | null
 }
 
 /** Enough groups that any channel count up to this spreads evenly over the stars. */
 const STAR_GROUPS = 64
 /** A trail reaches back to where the star was this many seconds ago. */
 const TRAIL_SEC = 0.12
+const PLANET_COOLDOWN_SEC = 8
+const MAX_PLANETS = 2
+/** planets drift at this fraction of the star speed */
+const PLANET_SPEED = 0.6
+/** planets start beyond the stars (z 1), so they come in small */
+const PLANET_START_Z = 2.5
+/** fade in from transparent over this much of the approach */
+const PLANET_FADE_Z = 0.8
+/** planets move slowly, so their trails reach further back than the stars' */
+const PLANET_TRAIL_SEC = 0.6
+const PLANET_BODIES = ['#4f6290', '#8a6a52', '#5e8270', '#735c8c', '#8c5a5a']
+/** MIDI has no patterns: a planet comes when the loudness jumps this far over its slow average */
+const LOUD_JUMP = 1.6
+
+const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo)
 
 function starfieldInstance(): VisualizerInstance {
   const drive = createDrive()
@@ -110,14 +142,22 @@ function starfieldInstance(): VisualizerInstance {
     y: Math.random() * 2 - 1,
     z: Math.random() * 0.95 + 0.05,
     group: Math.floor(Math.random() * STAR_GROUPS),
+    px: 0,
+    py: 0,
+    visible: false,
   }))
   /** per-channel pulse, 1 on a trigger, decaying over PULSE_SEC */
   const pulses = new Float32Array(STAR_GROUPS)
-  /** click cycles: plain, coloured, plain + trails, coloured + trails */
+  /** click cycles 8 modes; bit 1 = coloured, bit 2 = trails, bit 4 = planets */
   let mode = 0
+  let planets: Planet[] = []
+  let sinceSpawnSec = PLANET_COOLDOWN_SEC
+  let lastOrder: number | null = null
+  let slowLoud = 0
   return {
     click() {
-      mode = (mode + 1) % 4
+      mode = (mode + 1) % 8
+      if (!(mode & 4)) planets = []
     },
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)
@@ -128,6 +168,8 @@ function starfieldInstance(): VisualizerInstance {
       for (let i = 0; i < nCh; i++)
         pulses[i] = chs[i]?.triggered ? 1 : Math.max(0, (pulses[i] ?? 0) - dt / PULSE_SEC)
       const colours = mode & 1 ? themeColours(f.palette) : []
+      const tintOf = (group: number): string | undefined =>
+        colours[(group % nCh) % Math.max(1, colours.length)]
       const trails = (mode & 2) !== 0
       ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, f.width, f.height)
@@ -135,6 +177,47 @@ function starfieldInstance(): VisualizerInstance {
       const cx = f.width / 2
       const cy = f.height / 2
       const scale = Math.max(f.width, f.height) / 2
+      const projX = (x: number, z: number): number => cx + (x / z) * scale * 0.5
+      const projY = (y: number, z: number): number => cy + (y / z) * scale * 0.5
+
+      // Planets: one on each new pattern (MIDI: a loudness jump), with a cooldown.
+      const pos = f.snap.pos
+      let spawn: boolean
+      if (pos.kind === 'tracker') {
+        spawn = lastOrder !== null && pos.order !== lastOrder
+        lastOrder = pos.order
+      } else {
+        spawn = intensity > 0.2 && intensity > slowLoud * LOUD_JUMP
+        slowLoud += (intensity - slowLoud) * Math.min(1, dt / 3)
+      }
+      sinceSpawnSec += dt
+      if (mode & 4 && speed > 0) {
+        if (spawn && sinceSpawnSec >= PLANET_COOLDOWN_SEC && planets.length < MAX_PLANETS) {
+          sinceSpawnSec = 0
+          const a = rand(0, TAU)
+          const off = rand(0.35, 0.7)
+          planets.push({
+            x: Math.cos(a) * off,
+            y: Math.sin(a) * off,
+            z: PLANET_START_Z,
+            r: rand(0.07, 0.16),
+            group: Math.floor(Math.random() * STAR_GROUPS),
+            body: PLANET_BODIES[Math.floor(Math.random() * PLANET_BODIES.length)] ?? '#4f6290',
+            ring: Math.random() < 0.4 ? rand(-0.5, 0.5) : null,
+          })
+        }
+        for (const p of planets) p.z -= speed * PLANET_SPEED * dt
+        // gone once it has passed the camera or its disc has left the screen
+        planets = planets.filter((p) => {
+          if (p.z <= 0.05) return false
+          const rr = (p.r / p.z) * scale * 0.5 * 1.8
+          const px = projX(p.x, p.z)
+          const py = projY(p.y, p.z)
+          return px + rr > 0 && px - rr < f.width && py + rr > 0 && py - rr < f.height
+        })
+        planets.sort((a, b) => b.z - a.z)
+      }
+
       for (const s of stars) {
         s.z -= speed * dt
         if (s.z <= 0.02) {
@@ -142,17 +225,18 @@ function starfieldInstance(): VisualizerInstance {
           s.y = Math.random() * 2 - 1
           s.z = 1
         }
-        const px = cx + (s.x / s.z) * scale * 0.5
-        const py = cy + (s.y / s.z) * scale * 0.5
-        if (px < 0 || px >= f.width || py < 0 || py >= f.height) {
-          s.z = 1
-          continue
-        }
+        s.px = projX(s.x, s.z)
+        s.py = projY(s.y, s.z)
+        s.visible = s.px >= 0 && s.px < f.width && s.py >= 0 && s.py < f.height
+        if (!s.visible) s.z = 1
+      }
+
+      const drawStar = (s: Star): void => {
         // Each star follows one channel: on its hits nearer stars swell, whiten and get a halo.
         // Coloured mode fades the group into its theme colour instead of white.
-        const ch = s.group % nCh
-        const pulse = pulses[ch] ?? 0
-        const tint = colours[ch % Math.max(1, colours.length)]
+        const pulse = pulses[s.group % nCh] ?? 0
+        const tint = tintOf(s.group)
+        const { px, py } = s
         const near = 1 - s.z
         const size = (near * 2.5 + 0.5) * (1 + pulse * (0.5 + 1.5 * near))
         const c = Math.round(120 + 135 * near + (tint ? 0 : (135 - 135 * near) * pulse))
@@ -161,7 +245,7 @@ function starfieldInstance(): VisualizerInstance {
         if (trails && speed > 0 && pulse > 0.05) {
           const tz = s.z + speed * TRAIL_SEC
           ctx.beginPath()
-          ctx.moveTo(cx + (s.x / tz) * scale * 0.5, cy + (s.y / tz) * scale * 0.5)
+          ctx.moveTo(projX(s.x, tz), projY(s.y, tz))
           ctx.lineTo(px, py)
           ctx.lineWidth = size * 0.7
           ctx.globalAlpha = 0.6 * pulse
@@ -185,6 +269,87 @@ function starfieldInstance(): VisualizerInstance {
           ctx.globalAlpha = 1
         }
       }
+
+      const drawPlanet = (p: Planet): void => {
+        const px = projX(p.x, p.z)
+        const py = projY(p.y, p.z)
+        const r = (p.r / p.z) * scale * 0.5
+        const pulse = pulses[p.group % nCh] ?? 0
+        const tint = tintOf(p.group)
+        const body = tint ?? p.body
+        const glow = tint ?? 'rgb(200,210,255)'
+        const fade = Math.min(1, (PLANET_START_Z - p.z) / PLANET_FADE_Z)
+        // Trail modes: a streak the width of the disc, fading out toward where the planet was.
+        // Like the star trails it flashes with the planet's channel.
+        if (trails && speed > 0 && pulse > 0.05) {
+          const tz = p.z + speed * PLANET_SPEED * PLANET_TRAIL_SEC
+          const tx = projX(p.x, tz)
+          const ty = projY(p.y, tz)
+          const tg = ctx.createLinearGradient(tx, ty, px, py)
+          tg.addColorStop(0, 'rgba(0,0,0,0)')
+          tg.addColorStop(1, glow)
+          ctx.beginPath()
+          ctx.moveTo(tx, ty)
+          ctx.lineTo(px, py)
+          ctx.lineCap = 'round'
+          ctx.lineWidth = r * 1.6
+          ctx.globalAlpha = 0.35 * pulse * fade
+          ctx.strokeStyle = tg
+          ctx.stroke()
+          ctx.lineCap = 'butt'
+        }
+        ctx.globalAlpha = fade
+        // the ring pulses with the planet: it brightens toward the glow colour and blooms on hits
+        const ringPath = (from: number, to: number): void => {
+          if (p.ring === null) return
+          ctx.beginPath()
+          ctx.ellipse(px, py, r * 1.8, r * 0.45, p.ring, from, to)
+          ctx.lineWidth = Math.max(1, r * 0.12 * (1 + 0.5 * pulse))
+          ctx.globalAlpha = 0.7 * fade
+          ctx.strokeStyle = body
+          ctx.stroke()
+          if (pulse > 0.05) {
+            ctx.globalAlpha = 0.8 * pulse * fade
+            ctx.shadowColor = glow
+            ctx.shadowBlur = r * 0.3 * pulse
+            ctx.strokeStyle = glow
+            ctx.stroke()
+            ctx.shadowBlur = 0
+          }
+          ctx.globalAlpha = fade
+        }
+        ringPath(Math.PI, TAU) // back half, behind the body
+        // lit from the upper left, dark side to black so the bloom overlay can't wash it out
+        const g = ctx.createRadialGradient(px - r * 0.4, py - r * 0.4, r * 0.1, px, py, r)
+        g.addColorStop(0, body)
+        g.addColorStop(0.6, body)
+        g.addColorStop(1, '#000')
+        ctx.beginPath()
+        ctx.arc(px, py, r, 0, TAU)
+        ctx.fillStyle = g
+        ctx.fill()
+        // the planet follows a channel too: its rim lights up on that channel's hits
+        if (pulse > 0.05) {
+          ctx.globalAlpha = 0.8 * pulse * fade
+          ctx.shadowColor = glow
+          ctx.shadowBlur = r * 0.4 * pulse
+          ctx.lineWidth = Math.max(1, r * 0.06)
+          ctx.strokeStyle = glow
+          ctx.stroke()
+          ctx.shadowBlur = 0
+          ctx.globalAlpha = fade
+        }
+        ringPath(0, Math.PI) // front half
+        ctx.globalAlpha = 1
+      }
+
+      // far to near: each planet hides the stars behind it, nearer stars pass in front
+      let pi = 0
+      for (const s of stars.filter((st) => st.visible).sort((a, b) => b.z - a.z)) {
+        for (let p = planets[pi]; p && p.z >= s.z; p = planets[++pi]) drawPlanet(p)
+        drawStar(s)
+      }
+      for (let p = planets[pi]; p; p = planets[++pi]) drawPlanet(p)
     },
   }
 }
