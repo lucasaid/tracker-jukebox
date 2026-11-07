@@ -1,6 +1,6 @@
 // MilkDrop-lite: each frame redraws the previous one zoomed, rotated and faded, then draws the
 // waveform on top. Note triggers kick the zoom. Click toggles a line or ring wave. Canvas 2D only.
-import { createDrive, createStill, idle } from './demo'
+import { createDrive, createModeLabel, createStill, idle } from './demo'
 import type { VisualizerDef, VisualizerInstance } from './types'
 
 const RES = 0.5 // feedback buffer resolution vs. the canvas, for speed
@@ -17,9 +17,11 @@ function warpInstance(): VisualizerInstance {
   const bctx = buf.getContext('2d')
   let ring = true
   let t = 0
+  const label = createModeLabel()
   return {
     click() {
       ring = !ring
+      label.show(ring ? 'ring' : 'line')
     },
     draw(ctx, f, dt) {
       if (!f || !bctx) return idle(ctx, f)
@@ -74,6 +76,7 @@ function warpInstance(): VisualizerInstance {
 
       ctx.imageSmoothingEnabled = true
       ctx.drawImage(buf, 0, 0, f.width, f.height)
+      label.draw(ctx, dt)
     },
   }
 }

@@ -36,6 +36,29 @@ export function createStill(): (f: Frame) => boolean {
   }
 }
 
+/** The mode name a click shows in the top-left corner for a moment, like superscope's. */
+export function createModeLabel(): {
+  show(text: string): void
+  draw(ctx: CanvasRenderingContext2D, dt: number): void
+} {
+  let text = ''
+  let sec = 0
+  return {
+    show(t) {
+      text = t
+      sec = 1.5
+    },
+    draw(ctx, dt) {
+      if (sec <= 0) return
+      sec -= dt
+      ctx.fillStyle = '#c0c0c0'
+      ctx.font = '12px monospace'
+      ctx.textAlign = 'left'
+      ctx.fillText(text, 6, 16)
+    },
+  }
+}
+
 export const idle = (ctx: CanvasRenderingContext2D, f: Frame | null): void => {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, f?.width ?? ctx.canvas.clientWidth, f?.height ?? ctx.canvas.clientHeight)
@@ -51,7 +74,8 @@ const RIPPLES = 2 // each note drops a ripple at its channel's spot that bends t
 const SPECTRUM = 3 // bass / mids / treble drive the plasma's waves
 const WOBBLE = 4 // the audio waveform pushes each row sideways
 const KICK = 5 // the palette cycles with the tempo and jumps ahead on beats
-const PLASMA_MODES = 6
+const PLASMA_NAMES = ['swell', 'channels', 'ripples', 'spectrum', 'wobble', 'kick'] as const
+const PLASMA_MODES = PLASMA_NAMES.length
 const MAX_RIPPLES = 24
 const RIPPLE_LIFE_SEC = 1.6
 /** ring speed in plasma cells per second */
@@ -93,9 +117,11 @@ function plasmaInstance(): VisualizerInstance {
   let high = 0
   let palettePhase = 0
   let mode = SWELL
+  const label = createModeLabel()
   return {
     click() {
       mode = (mode + 1) % PLASMA_MODES
+      label.show(PLASMA_NAMES[mode] ?? '')
     },
     draw(ctx, f, dt) {
       if (!f || !sctx) return idle(ctx, f)
@@ -204,6 +230,7 @@ function plasmaInstance(): VisualizerInstance {
       sctx.putImageData(img, 0, 0)
       ctx.imageSmoothingEnabled = true
       ctx.drawImage(small, 0, 0, f.width, f.height)
+      label.draw(ctx, dt)
     },
   }
 }
@@ -273,10 +300,16 @@ function starfieldInstance(): VisualizerInstance {
   let sinceSpawnSec = PLANET_COOLDOWN_SEC
   let lastOrder: number | null = null
   let slowLoud = 0
+  const label = createModeLabel()
   return {
     click() {
       mode = (mode + 1) % 8
       if (!(mode & 4)) planets = []
+      label.show(
+        [mode & 1 ? 'colour' : 'plain', mode & 2 ? 'trails' : '', mode & 4 ? 'planets' : '']
+          .filter(Boolean)
+          .join(' + '),
+      )
     },
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)
@@ -469,6 +502,7 @@ function starfieldInstance(): VisualizerInstance {
         drawStar(s)
       }
       for (let p = planets[pi]; p; p = planets[++pi]) drawPlanet(p)
+      label.draw(ctx, dt)
     },
   }
 }
