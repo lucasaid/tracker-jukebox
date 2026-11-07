@@ -54,6 +54,7 @@ function drawMeter(
   ledOn: boolean,
   label: string,
   p: Palette,
+  font: string,
 ): void {
   ctx.fillStyle = p.grid
   ctx.fillRect(x, y, w, h)
@@ -80,7 +81,9 @@ function drawMeter(
   ctx.arc(cx, pivotY, r, split, -Math.PI / 2 + SWING_RAD)
   ctx.stroke()
 
-  ctx.font = `${Math.max(8, Math.round(r * 0.08))}px monospace`
+  // the VGA font is a bitmap face: sizes snap to multiples of 8px so the glyphs stay crisp
+  const small = `${Math.max(8, Math.round((r * 0.08) / 8) * 8)}px ${font}`
+  ctx.font = small
   ctx.textAlign = 'center'
   ctx.textBaseline = 'bottom'
   ctx.lineWidth = Math.max(1, r * 0.012)
@@ -98,9 +101,9 @@ function drawMeter(
   }
 
   ctx.fillStyle = p.fg
-  ctx.font = `bold ${Math.max(10, Math.round(r * 0.14))}px serif`
+  ctx.font = `${Math.max(16, Math.round((r * 0.14) / 16) * 16)}px ${font}`
   ctx.fillText('VU', cx, pivotY - r * 0.35)
-  ctx.font = `${Math.max(8, Math.round(r * 0.08))}px monospace`
+  ctx.font = small
   ctx.textAlign = 'left'
   ctx.fillText(label, x + m * 2, y + h - m * 2)
 
@@ -192,6 +195,8 @@ function vuInstance(): VisualizerInstance {
           (ledSec[s] ?? 0) > 0,
           s ? 'R' : 'L',
           f.palette,
+          // the page font (--font), inherited by the canvas element
+          getComputedStyle(ctx.canvas).fontFamily,
         )
       }
     },

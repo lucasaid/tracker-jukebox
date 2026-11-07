@@ -28,6 +28,9 @@ const TOKENS: readonly (readonly [keyof Palette, string])[] = [
 /** Glow overlay size vs. the canvas; the browser's upscale + the CSS blur do the softening. */
 const GLOW_SCALE = 0.25
 
+/** Visualizers the bloom overlay skips: dense images that just wash out. */
+const NO_GLOW: ReadonlySet<string> = new Set(['spectrogram'])
+
 /** --viz-glow-opacity > 0 turns on the bloom overlay (see theme.css). */
 function readGlow(): boolean {
   return (
@@ -174,7 +177,7 @@ export function VisualizerHost(props: {
       try {
         instance.draw(ctx, f, dt)
         // Bloom: a small copy on an overlay, so the main canvas (and any trails it keeps) is untouched.
-        if (glow && glowCanvas && glowCtx) {
+        if (glow && glowCanvas && glowCtx && !NO_GLOW.has(id)) {
           glowCtx.drawImage(canvas, 0, 0, glowCanvas.width, glowCanvas.height)
         }
       } catch (err) {

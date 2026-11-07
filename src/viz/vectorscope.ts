@@ -1,7 +1,8 @@
 // Vectorscope / goniometer: each stereo sample plotted as a dot, rotated 45° so mono is a vertical
 // line and wide stereo spreads sideways. L/R are rebuilt from the channel scopes, like the VU meters.
-// Themed: --scope-bg, --scope-grid guides, --dim labels, --scope-wave dots.
+// Themed: --scope-bg, --scope-grid guides, --dim labels, --scope-wave dots. Click cycles the dot colour.
 import { SCOPE_LEN } from '../engine'
+import { createColourCycle } from './colours'
 import { idle } from './demo'
 import type { VisualizerDef, VisualizerInstance } from './types'
 import { mixLR } from './vu'
@@ -15,7 +16,9 @@ function vectorscopeInstance(): VisualizerInstance {
   const right = new Float32Array(SCOPE_LEN)
   let gain = 1
   let size = ''
+  const cycle = createColourCycle()
   return {
+    click: cycle.next,
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)
       const key = `${f.width}x${f.height}`
@@ -57,7 +60,7 @@ function vectorscopeInstance(): VisualizerInstance {
       }
       // ponytail: simple auto-gain so quiet songs still fill the circle; the plot shows shape, not level
       if (peak > 1e-4) gain += (FILL / peak - gain) * Math.min(1, dt / AGC_SEC)
-      ctx.fillStyle = p.wave
+      ctx.fillStyle = cycle.colour(p)
       for (let i = 0; i < len; i++) {
         const l = (left[i] ?? 0) * gain
         const r = (right[i] ?? 0) * gain

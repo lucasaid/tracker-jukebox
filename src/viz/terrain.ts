@@ -1,5 +1,7 @@
 // 3D spectrum terrain: past spectra as ridge lines receding toward a horizon, newest at the front.
 // Themed: --scope-bg behind, --scope-wave ridges fading into the background with depth.
+// Click cycles the ridge colour through the theme's palette.
+import { createColourCycle } from './colours'
 import type { VisualizerDef, VisualizerInstance } from './types'
 
 const BANDS = 48
@@ -25,7 +27,9 @@ function terrainInstance(): VisualizerInstance {
       Math.floor((MIN_HZ * (MAX_HZ / MIN_HZ) ** ((b + 1) / BANDS)) / BIN_HZ),
     )
   }
+  const cycle = createColourCycle()
   return {
+    click: cycle.next,
     draw(ctx, f, dt) {
       const w = f?.width ?? ctx.canvas.clientWidth
       const h = f?.height ?? ctx.canvas.clientHeight
@@ -33,6 +37,7 @@ function terrainInstance(): VisualizerInstance {
       ctx.fillRect(0, 0, w, h)
       if (!f) return
       const p = f.palette
+      const wave = cycle.colour(p)
       pendingSec += dt
       // ponytail: at most 4 rows per frame, so a long stall doesn't fill the field with one spectrum
       const steps = Math.min(4, Math.floor(pendingSec / ROW_SEC))
@@ -67,7 +72,7 @@ function terrainInstance(): VisualizerInstance {
         ctx.lineTo(cx + spanX * s * 0.5, baseY)
         ctx.fillStyle = p.bg
         ctx.fill()
-        ctx.strokeStyle = p.wave
+        ctx.strokeStyle = wave
         ctx.globalAlpha = 1 - z * 0.8
         ctx.stroke()
         ctx.globalAlpha = 1

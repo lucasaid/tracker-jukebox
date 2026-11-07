@@ -1,4 +1,5 @@
 // Per-channel scopes + VU (decision 30).
+import { createColourCycle } from './colours'
 import type { VisualizerDef } from './types'
 
 const VU_DECAY_SEC = 0.3
@@ -8,7 +9,9 @@ export const channels: VisualizerDef = {
   name: 'Channels',
   create: () => {
     let vu: number[] = []
+    const cycle = createColourCycle()
     return {
+      click: cycle.next,
       draw(ctx, f, dt) {
         const w = f?.width ?? ctx.canvas.clientWidth
         const h = f?.height ?? ctx.canvas.clientHeight
@@ -19,6 +22,7 @@ export const channels: VisualizerDef = {
         const scopes = f.snap.scopes
         const n = scopes.length
         if (n === 0) return
+        const wave = cycle.colour(p)
         if (vu.length !== n) vu = new Array<number>(n).fill(0)
         const cols = Math.max(1, Math.min(n, Math.round(Math.sqrt((n * w) / Math.max(h, 1)))))
         const rows = Math.ceil(n / cols)
@@ -39,11 +43,11 @@ export const channels: VisualizerDef = {
           ctx.strokeStyle = p.grid
           ctx.strokeRect(x0 + 0.5, y0 + 0.5, cw - 1, ch - 1)
           const vuW = 4
-          ctx.fillStyle = p.wave
+          ctx.fillStyle = wave
           const vuH = (vu[c] ?? 0) * (ch - 4)
           ctx.fillRect(x0 + cw - vuW - 2, y0 + ch - 2 - vuH, vuW, vuH)
 
-          ctx.strokeStyle = p.wave
+          ctx.strokeStyle = wave
           ctx.beginPath()
           const plotW = cw - vuW - 6
           const mid = y0 + ch / 2
