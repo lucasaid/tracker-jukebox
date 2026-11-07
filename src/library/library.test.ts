@@ -14,6 +14,7 @@ const meta = (file: string) => ({
   sizeBytes: 1,
   durationSec: 2,
   loops: false,
+  addedAt: '2026-11-07T00:00:00.000Z',
 })
 const load = (rel: string) => parseFile(new Uint8Array(readFileSync(`trackers/${rel}`)))
 
@@ -49,6 +50,7 @@ const good: ManifestEntry = {
   sampleNames: ['x'],
   message: '',
   midiTarget: null,
+  addedAt: '2026-11-07T00:00:00.000Z',
 }
 
 const serve = (body: unknown): void => {
@@ -121,6 +123,11 @@ suite('search', () => {
     expect(ids(sortEntries(list, 'durationSec', 'asc'))).toEqual(['b', 'c', 'a'])
     expect(ids(sortEntries(list, 'durationSec', 'desc'))).toEqual(['a', 'b', 'c'])
     expect(ids(sortEntries(list, 'channels', 'desc'))).toEqual(['b', 'c', 'a'])
+    const dated = [
+      entry({ id: 'new', addedAt: '2026-12-01T00:00:00.000Z' }),
+      entry({ id: 'old', addedAt: '2026-01-01T00:00:00.000Z' }),
+    ]
+    expect(ids(sortEntries(dated, 'addedAt', 'asc'))).toEqual(['old', 'new'])
   })
   it('does not mutate its input', () => {
     const copy = [...list]

@@ -1,7 +1,7 @@
 import type { Format } from '../formats'
 import type { ManifestEntry } from './manifest'
 
-export type SortKey = 'title' | 'format' | 'channels' | 'durationSec' | 'sizeBytes'
+export type SortKey = 'title' | 'format' | 'channels' | 'durationSec' | 'sizeBytes' | 'addedAt'
 
 /** An empty array means "all". */
 export interface Filters {

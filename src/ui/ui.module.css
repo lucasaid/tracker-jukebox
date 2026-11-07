@@ -111,6 +111,11 @@
   text-align: right !important;
   display: none;
 }
+.colAdded {
+  width: 11ch;
+  text-align: right !important;
+  display: none;
+}
 .search {
   width: 100%;
   padding: 6px var(--space-2);
@@ -241,7 +246,8 @@
   .colLen {
     width: 9ch;
   }
-  .colSize {
+  .colSize,
+  .colAdded {
     display: table-cell;
   }
 }

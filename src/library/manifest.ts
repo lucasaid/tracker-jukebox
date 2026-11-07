@@ -18,6 +18,8 @@ export interface ManifestEntry {
   sampleNames: string[]
   message: string
   midiTarget: MidiTarget | null
+  /** ISO 8601: when the song first appeared in the manifest (scripts/added.json), or when it was dropped */
+  addedAt: string
 }
 
 export interface Manifest {
@@ -47,7 +49,8 @@ function isEntry(u: unknown): u is ManifestEntry {
     Array.isArray(u['sampleNames']) &&
     u['sampleNames'].every((n) => typeof n === 'string') &&
     typeof u['message'] === 'string' &&
-    (u['midiTarget'] === null || u['midiTarget'] === 'gm' || u['midiTarget'] === 'mt32')
+    (u['midiTarget'] === null || u['midiTarget'] === 'gm' || u['midiTarget'] === 'mt32') &&
+    typeof u['addedAt'] === 'string'
   )
 }
 
@@ -76,6 +79,7 @@ export function describe(
     sizeBytes: number
     durationSec: number
     loops: boolean
+    addedAt: string
   },
 ): ManifestEntry {
   const title = parsed.title.trim()

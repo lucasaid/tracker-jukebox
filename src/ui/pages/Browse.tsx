@@ -17,6 +17,7 @@ const COLUMNS: { key: SortKey; label: string; cls: string }[] = [
   { key: 'channels', label: 'Ch', cls: styles.colCh ?? '' },
   { key: 'durationSec', label: 'Length', cls: styles.colLen ?? '' },
   { key: 'sizeBytes', label: 'Size', cls: styles.colSize ?? '' },
+  { key: 'addedAt', label: 'Added', cls: styles.colAdded ?? '' },
 ]
 
 const toggle = <T,>(list: readonly T[], v: T): T[] =>
@@ -73,6 +74,7 @@ export function Browse() {
       <td className={styles.colCh}>{e.channels}</td>
       <td className={styles.colLen}>{e.loops ? '--:--' : formatTime(e.durationSec)}</td>
       <td className={styles.colSize}>{Math.ceil(e.sizeBytes / 1024)}K</td>
+      <td className={styles.colAdded}>{e.addedAt.slice(0, 10)}</td>
     </tr>
   )
 

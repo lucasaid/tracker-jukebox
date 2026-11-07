@@ -54,7 +54,13 @@ function scan(): FileRow[] {
     try {
       const parsed = parseFile(bytes, { midiTarget: midi[id] ?? 'gm' })
       const { seconds, loops } = computeLength(parsed)
-      const e = describe(parsed, { ...base, url: null, durationSec: seconds, loops })
+      const e = describe(parsed, {
+        ...base,
+        url: null,
+        durationSec: seconds,
+        loops,
+        addedAt: '', // unused by the manager
+      })
       return {
         ...base,
         format: e.format,

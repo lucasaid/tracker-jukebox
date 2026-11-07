@@ -812,6 +812,7 @@ export interface ManifestEntry {
   sampleNames: string[] // non-empty names in order; [] for MIDI
   message: string
   midiTarget: MidiTarget | null // null for trackers
+  addedAt: string // ISO 8601; first-seen stamp from scripts/added.json, or drop time for local entries
 }
 export interface Manifest {
   version: 1
@@ -831,11 +832,12 @@ export function describe(
     sizeBytes: number
     durationSec: number
     loops: boolean
+    addedAt: string
   },
 ): ManifestEntry
 
 // search.ts
-export type SortKey = 'title' | 'format' | 'channels' | 'durationSec' | 'sizeBytes'
+export type SortKey = 'title' | 'format' | 'channels' | 'durationSec' | 'sizeBytes' | 'addedAt'
 export interface Filters {
   query: string
   formats: Format[]
@@ -1045,12 +1047,12 @@ export function usePlayer(): PlayerApi
 
 ### Script contracts
 
-| Command                                                                                     | Input                                                                                                                                   | Output                                                                                                                                                        | Exit                                                                                    |
-| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `pnpm manifest`                                                                             | `trackers/**` (dotfiles skipped); from P23 `scripts/midi-overrides.json` (`Record<id, MidiTarget>`)                                     | deletes `public/music/`, copies each OK file to `public/music/<id>`, writes `public/manifest.json` (entries sorted by id), one stdout line per file + summary | 0 if ≥ 1 OK, else 1                                                                     |
-| `pnpm render <in> [out.wav] [--interp nearest\|linear\|cubic] [--sep 0..100] [--rate <Hz>]` | a supported file (from P25 MIDI, using `public/soundfonts/GeneralUser-GS.sf2`)                                                          | 16-bit stereo WAV (default `./<basename>.wav`); prints `<seconds>s peak <dBFS> dBFS`                                                                          | 0 ok, 1 parse/IO error, 2 bad args                                                      |
-| `pnpm compare [<format> \| <id substring>]`                                                 | tracker files in `trackers/` (an arg equal to a TrackerFormat filters by _detected_ format; otherwise it's an id substring; none = all) | one table row per file: `id · ours s · ref s · Δs · ΔdB · corr · PASS/FAIL/ERROR`                                                                             | 0 all PASS, 1 any FAIL/ERROR, 2 openmpt123 not found (prints `brew install libopenmpt`) |
-| `pnpm fetch-soundfont`                                                                      | `SOUNDFONT_URL`, `SOUNDFONT_SHA256` in the script                                                                                       | `public/soundfonts/GeneralUser-GS.sf2`; skipped if present with the right hash                                                                                | 0 ok, 1 download or hash failure (partial file deleted)                                 |
+| Command                                                                                     | Input                                                                                                                                   | Output                                                                                                                                                                                                                                                | Exit                                                                                    |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `pnpm manifest`                                                                             | `trackers/**` (dotfiles skipped); from P23 `scripts/midi-overrides.json` (`Record<id, MidiTarget>`)                                     | deletes `public/music/`, copies each OK file to `public/music/<id>`, writes `public/manifest.json` (entries sorted by id), adds first-seen stamps to `scripts/added.json` (`Record<id, ISO 8601>`, never removes), one stdout line per file + summary | 0 if ≥ 1 OK, else 1                                                                     |
+| `pnpm render <in> [out.wav] [--interp nearest\|linear\|cubic] [--sep 0..100] [--rate <Hz>]` | a supported file (from P25 MIDI, using `public/soundfonts/GeneralUser-GS.sf2`)                                                          | 16-bit stereo WAV (default `./<basename>.wav`); prints `<seconds>s peak <dBFS> dBFS`                                                                                                                                                                  | 0 ok, 1 parse/IO error, 2 bad args                                                      |
+| `pnpm compare [<format> \| <id substring>]`                                                 | tracker files in `trackers/` (an arg equal to a TrackerFormat filters by _detected_ format; otherwise it's an id substring; none = all) | one table row per file: `id · ours s · ref s · Δs · ΔdB · corr · PASS/FAIL/ERROR`                                                                                                                                                                     | 0 all PASS, 1 any FAIL/ERROR, 2 openmpt123 not found (prints `brew install libopenmpt`) |
+| `pnpm fetch-soundfont`                                                                      | `SOUNDFONT_URL`, `SOUNDFONT_SHA256` in the script                                                                                       | `public/soundfonts/GeneralUser-GS.sf2`; skipped if present with the right hash                                                                                                                                                                        | 0 ok, 1 download or hash failure (partial file deleted)                                 |
 
 ```ts
 // scripts/wav.ts

@@ -316,6 +316,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         sizeBytes: file.size,
         durationSec: seconds,
         loops,
+        addedAt: new Date().toISOString(),
       })
       localsRef.current = [...localsRef.current, { entry, parsed }]
       setLocals(localsRef.current)

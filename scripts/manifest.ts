@@ -1,5 +1,5 @@
 // pnpm manifest — see docs/PLAN.md → Contracts → Script contracts.
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, sep } from 'node:path'
 import { computeLength } from '../src/engine'
 import { parseFile } from '../src/formats'
@@ -11,6 +11,13 @@ const musicDir = join(root, 'public', 'music')
 // Exclusions and title overrides from scripts/curation.json (edited with `pnpm manage`, decision 50).
 const curation = loadCuration()
 const excluded = new Set(curation.exclude)
+// id → ISO date the song first showed up here. Only this script writes it, so `pnpm manage` saves can't drop it.
+const ADDED_PATH = join(root, 'scripts', 'added.json')
+const rawAdded: unknown = existsSync(ADDED_PATH) ? JSON.parse(readFileSync(ADDED_PATH, 'utf8')) : {}
+const added: Record<string, string> = {}
+if (typeof rawAdded === 'object' && rawAdded !== null)
+  for (const [id, v] of Object.entries(rawAdded)) if (typeof v === 'string') added[id] = v
+const now = new Date().toISOString()
 
 const out = (line: string): void => void process.stdout.write(`${line}\n`)
 
@@ -37,6 +44,7 @@ for (const path of walk(trackersDir)) {
       sizeBytes: bytes.length,
       durationSec: seconds,
       loops,
+      addedAt: (added[id] ??= now),
     })
     entries.push({ ...entry, title: curation.titles[id] ?? entry.title })
     ok.push({ path, id })
@@ -62,6 +70,11 @@ const manifest: Manifest = {
   generatedAt: new Date().toISOString(),
   entries: entries.sort((a, b) => a.id.localeCompare(b.id)),
 }
+// Stamps persist for excluded or removed songs too, so re-adding one keeps its original date.
+writeFileSync(
+  ADDED_PATH,
+  `${JSON.stringify(Object.fromEntries(Object.entries(added).sort(([a], [b]) => a.localeCompare(b))), null, 2)}\n`,
+)
 writeFileSync(join(root, 'public', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
 out(
