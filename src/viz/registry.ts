@@ -3,6 +3,7 @@ import config from '../../viz.config.json'
 import { bars } from './bars'
 import { channels } from './channels'
 import { copper, plasma, starfield } from './demo'
+import { geiss } from './geiss'
 import { oscilloscope } from './oscilloscope'
 import { particles } from './particles'
 import { pattern } from './pattern'
@@ -33,6 +34,7 @@ export const all: readonly VisualizerDef[] = [
   tunnel,
   particles,
   radial,
+  geiss,
   plasma,
   starfield,
   copper,
