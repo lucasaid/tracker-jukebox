@@ -5,7 +5,8 @@ import type { ManifestEntry } from '../../library/manifest'
 import styles from '../ui.module.css'
 import { formatTime } from './PlayerBar'
 
-export function InfoPanel({ entry }: { entry: ManifestEntry }) {
+/** `details` = false leaves out the message and sample names, for NowPlaying where tabs show them. */
+export function InfoPanel({ entry, details = true }: { entry: ManifestEntry; details?: boolean }) {
   const { play, favorites, toggleFavorite } = usePlayer()
   const local = entry.id.startsWith('local:')
   // Seeded from the manifest's detected target; changing it replays with the other mapping.
@@ -51,8 +52,8 @@ export function InfoPanel({ entry }: { entry: ManifestEntry }) {
           </button>
         )}
       </p>
-      {entry.message && <pre className={styles.message}>{entry.message}</pre>}
-      {entry.sampleNames.length > 0 && (
+      {details && entry.message && <pre className={styles.message}>{entry.message}</pre>}
+      {details && entry.sampleNames.length > 0 && (
         <p className={styles.note}>Samples: {entry.sampleNames.join(' · ')}</p>
       )}
     </section>

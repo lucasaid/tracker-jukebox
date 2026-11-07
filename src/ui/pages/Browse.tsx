@@ -5,9 +5,9 @@ import type { Format } from '../../formats'
 import { EMPTY_FILTERS, filterEntries, sortEntries } from '../../library/search'
 import type { Filters, SortKey } from '../../library/search'
 import type { ManifestEntry } from '../../library/manifest'
+import { formatRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { DropZone } from '../components/DropZone'
-import { InfoPanel } from '../components/InfoPanel'
 import { formatTime } from '../components/PlayerBar'
 import styles from '../ui.module.css'
 
@@ -32,24 +32,17 @@ export function Browse() {
     key: 'title',
     dir: 'asc',
   })
-  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const rows = sortEntries(filterEntries(entries, filters, favorites), sort.key, sort.dir)
   const bundled = rows.filter((e) => !isLocal(e))
   const locals = rows.filter(isLocal)
   const channelCounts = [...new Set(entries.map((e) => e.channels))].sort((a, b) => a - b)
-  const selected = entries.find((e) => e.id === selectedId) ?? null
 
   const sortBy = (key: SortKey): void =>
     setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
 
   const row = (e: ManifestEntry) => (
-    <tr
-      key={e.id}
-      className={
-        e.id === current?.id ? styles.playing : e.id === selectedId ? styles.selected : undefined
-      }
-    >
+    <tr key={e.id} className={e.id === current?.id ? styles.playing : undefined}>
       <th scope="row" className={styles.colPlay}>
         <button
           className={styles.btn}
@@ -72,9 +65,9 @@ export function Browse() {
         )}
       </td>
       <td title={e.file}>
-        <button className={styles.link} onClick={() => setSelectedId(e.id)}>
+        <a className={styles.link} href={formatRoute({ page: 'play', id: e.id, seek: null })}>
           {e.title}
-        </button>
+        </a>
       </td>
       <td className={styles.colFmt}>{e.format.toUpperCase()}</td>
       <td className={styles.colCh}>{e.channels}</td>
@@ -185,7 +178,6 @@ export function Browse() {
           </>
         )}
       </section>
-      {selected && <InfoPanel key={selected.id} entry={selected} />}
     </>
   )
 }

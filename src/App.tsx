@@ -33,6 +33,7 @@ function Shell() {
   const locked = player.status === 'locked'
   const started = useRef('')
   const routeKey = route.page === 'play' ? JSON.stringify(route) : ''
+  const shareLink = route.page === 'play' && route.seek !== null
   const { play, entries, status, current } = player
   useEffect(() => {
     if (playId === null || !manifestReady) return
@@ -41,7 +42,9 @@ function Shell() {
       go({ page: 'browse' })
       return
     }
-    if (locked || started.current === routeKey) return
+    // Only share links (they always carry ?order= or ?t=) start playing; opening a song from
+    // Browse or VIEW just shows it.
+    if (!shareLink || locked || started.current === routeKey) return
     started.current = routeKey
     if (current?.id !== playId && status !== 'loading')
       void play(playId, { seek: route.page === 'play' ? (route.seek ?? undefined) : undefined })
@@ -123,7 +126,7 @@ function Shell() {
       <main className={styles.main}>
         <ErrorBoundary>
           {route.page === 'play' && known ? (
-            <NowPlaying />
+            <NowPlaying id={route.id} />
           ) : route.page === 'jukebox' ? (
             <Jukebox />
           ) : route.page === 'landing' ? (
@@ -137,7 +140,7 @@ function Shell() {
       </main>
       <Toast />
       {!landing && <PlayerBar />}
-      {route.page === 'play' && known && locked && (
+      {route.page === 'play' && shareLink && known && locked && (
         <ConnectOverlay
           title={entries.find((e) => e.id === route.id)?.title ?? ''}
           onConnect={connect}

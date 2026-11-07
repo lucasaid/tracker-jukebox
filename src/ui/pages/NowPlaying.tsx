@@ -6,6 +6,7 @@ import { useSettings } from '../../state/SettingsContext'
 import { VisualizerHost } from '../../viz'
 import { formatTime } from '../components/PlayerBar'
 import { ChannelStrip } from '../components/ChannelStrip'
+import { InfoPanel } from '../components/InfoPanel'
 import { MessageScroller } from '../components/MessageScroller'
 import { SampleBrowser } from '../components/SampleBrowser'
 import { showToast } from '../components/Toast'
@@ -28,8 +29,8 @@ const takeTab = (): Tab | null => {
   return t
 }
 
-export function NowPlaying() {
-  const { engine, current } = usePlayer()
+export function NowPlaying({ id }: { id: string }) {
+  const { engine, current, entries } = usePlayer()
   const { settings } = useSettings()
   const [where, setWhere] = useState('')
   const [link, setLink] = useState<string | null>(null)
@@ -74,6 +75,10 @@ export function NowPlaying() {
     }
   }
 
+  // A song that isn't playing yet shows its info (with PLAY) until it is started.
+  const viewed = entries.find((e) => e.id === id)
+  if (viewed && viewed.id !== current?.id) return <InfoPanel key={viewed.id} entry={viewed} />
+
   return (
     <section className={styles.panel}>
       <h2 className={styles.heading}>NOW PLAYING</h2>
@@ -108,7 +113,7 @@ export function NowPlaying() {
         </>
       )}
       {shown === 'message' && <MessageScroller />}
-      {shown === 'samples' && <SampleBrowser key={current?.id} />}
+      {shown === 'samples' && <SampleBrowser key={`samples:${current?.id}`} />}
       <p>
         <button className={styles.btn} onClick={() => void share()} disabled={!current}>
           SHARE
@@ -124,6 +129,7 @@ export function NowPlaying() {
           ref={(el) => el?.select()}
         />
       )}
+      {current && <InfoPanel key={`info:${current.id}`} entry={current} details={false} />}
     </section>
   )
 }
