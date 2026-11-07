@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { ByteReader, ParseError, decodeCp437, detectFormat } from './index'
-import type { Format } from './index'
+import { ByteReader, ParseError, decodeCp437, detectFormat, parseFile } from './index'
+import { parseMod } from './mod'
+import { parseStm } from './stm'
+import type { Format, Song } from './index'
 
 const load = (rel: string): Uint8Array => new Uint8Array(readFileSync(`trackers/${rel}`))
 
@@ -72,5 +74,55 @@ describe('decodeCp437', () => {
   it('maps control and high bytes, keeps ASCII', () => {
     expect(decodeCp437(new Uint8Array([0x0e, 0xb0]))).toBe('♫░')
     expect(decodeCp437(new Uint8Array([72, 105, 33]))).toBe('Hi!')
+  })
+})
+
+const song = (rel: string): Song => {
+  const s = parseFile(load(rel))
+  if (s.kind !== 'tracker') throw new Error('expected tracker')
+  return s
+}
+
+describe('MOD + STM parsers', () => {
+  it('12WARIOR', () => {
+    const s = song('mod/12WARIOR.MOD')
+    expect([s.channels, s.orders.length, s.patterns.length]).toEqual([4, 30, 23])
+  })
+  it('90210', () => {
+    const s = song('mod/90210.MOD')
+    expect(s.title).toBe('Beverly Hills 90210')
+    expect(s.samples[0]?.name).toBe('BASS.SAM')
+    expect([s.channels, s.orders.length]).toEqual([4, 13])
+  })
+  it('1CARESS', () => {
+    const s = song('mod/1CARESS.MOD')
+    expect(s.samples[0]?.name).toBe('Empire BBS')
+    expect(s.samples[1]?.name).toBe('679-0488')
+  })
+  it('CANTINA (8CHN MOD)', () => {
+    const s = song('669/CANTINA.669')
+    expect(s.format).toBe('mod')
+    expect([s.channels, s.orders.length, s.patterns.length, s.title]).toEqual([
+      8,
+      17,
+      17,
+      'Cantina band',
+    ])
+  })
+  it('KTULHU', () => {
+    const s = song('s3m/KTULHU.STM')
+    expect(s.format).toBe('stm')
+    expect([s.title, s.channels, s.patterns.length]).toEqual(['the call of ktulu', 4, 42])
+  })
+  // parseFile can't see these: detectFormat needs 1084 bytes for a MOD, so a 600-byte MOD is
+  // 'unknown format'. The parsers themselves must throw ParseError.
+  it.each([
+    ['mod/12WARIOR.MOD', parseMod],
+    ['mod/90210.MOD', parseMod],
+    ['mod/1CARESS.MOD', parseMod],
+    ['669/CANTINA.669', parseMod],
+    ['s3m/KTULHU.STM', parseStm],
+  ] as const)('%s truncated to 600 bytes throws ParseError', (file, parse) => {
+    expect(() => parse(load(file).subarray(0, 600))).toThrow(ParseError)
   })
 })

@@ -1,3 +1,6 @@
+import { UnsupportedFormatError } from './bytes'
+import { parseMod } from './mod'
+import { parseStm } from './stm'
 import type { Format, MidiTarget, ParsedFile, SoundBank } from './song'
 
 export * from './song'
@@ -27,8 +30,12 @@ export function detectFormat(bytes: Uint8Array): Format | null {
 }
 
 /** Throws ParseError | UnsupportedFormatError. Never returns partial data. */
-export function parseFile(_bytes: Uint8Array, _opts?: { midiTarget?: MidiTarget }): ParsedFile {
-  throw new Error('Not implemented (P4)')
+export function parseFile(bytes: Uint8Array, _opts?: { midiTarget?: MidiTarget }): ParsedFile {
+  const format = detectFormat(bytes)
+  if (format === null) throw new UnsupportedFormatError('unknown format')
+  if (format === 'mod') return parseMod(bytes)
+  if (format === 'stm') return parseStm(bytes)
+  throw new UnsupportedFormatError(format) // s3m/669/mtm/midi land in later phases
 }
 
 /** Throws ParseError. */
