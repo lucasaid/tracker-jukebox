@@ -125,6 +125,8 @@ export class AudioEngine {
     if (!AudioEngine.isSupported()) throw new AudioUnsupportedError('Web Audio is not supported')
     const ctx = new AudioContext()
     this.ctx = ctx
+    // iOS Safari only honours resume() inside the user gesture, which ends at the first await below.
+    void ctx.resume()
     await ctx.audioWorklet.addModule(workletUrl)
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 2048

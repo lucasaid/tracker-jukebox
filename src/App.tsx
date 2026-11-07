@@ -4,7 +4,9 @@ import { ErrorBoundary } from './ui/components/ErrorBoundary'
 import { PlayerBar } from './ui/components/PlayerBar'
 import { Toast, showToast } from './ui/components/Toast'
 import { Browse } from './ui/pages/Browse'
+import { Credits } from './ui/pages/Credits'
 import { Jukebox } from './ui/pages/Jukebox'
+import { Landing } from './ui/pages/Landing'
 import { NowPlaying } from './ui/pages/NowPlaying'
 import { PlayerProvider, usePlayer } from './state/PlayerContext'
 import { useHashRoute } from './state/route'
@@ -69,6 +71,12 @@ function Shell() {
         if (snap?.pos.kind === 'tracker') engine.seek({ order: Math.max(0, snap.pos.order + d) })
         else if (snap) engine.seek({ seconds: Math.max(0, snap.seconds + d * 10) })
         consume()
+      } else if (e.key === 'b' || e.key === 'B') {
+        go({ page: 'browse' })
+      } else if (e.key === 'j' || e.key === 'J') {
+        go({ page: 'jukebox' })
+      } else if (e.key === 'c' || e.key === 'C') {
+        go({ page: 'credits' })
       } else if (e.key === 'n' || e.key === 'N') {
         void player.next()
       } else if (e.key === 'v' || e.key === 'V') {
@@ -88,34 +96,41 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  const page = route.page === 'landing' ? 'browse' : route.page
+  const page = route.page
+  const landing = page === 'landing'
   return (
     <>
-      <header className={styles.top}>
-        <h1 className={styles.title}>TRACKER JUKEBOX</h1>
-        <nav className={styles.nav}>
-          <a href="#/browse" aria-current={page === 'browse' ? 'page' : undefined}>
-            Browse
-          </a>
-          <a href="#/jukebox" aria-current={page === 'jukebox' ? 'page' : undefined}>
-            Jukebox
-          </a>
-        </nav>
-        <div className={styles.rule} />
-      </header>
+      {!landing && (
+        <header className={styles.top}>
+          <h1 className={styles.title}>TRACKER JUKEBOX</h1>
+          <nav className={styles.nav}>
+            <a href="#/browse" aria-current={page === 'browse' ? 'page' : undefined}>
+              Browse
+            </a>
+            <a href="#/jukebox" aria-current={page === 'jukebox' ? 'page' : undefined}>
+              Jukebox
+            </a>
+          </nav>
+          <div className={styles.rule} />
+        </header>
+      )}
       <main className={styles.main}>
         <ErrorBoundary>
           {route.page === 'play' && known ? (
             <NowPlaying />
           ) : route.page === 'jukebox' ? (
             <Jukebox />
+          ) : route.page === 'landing' ? (
+            <Landing />
+          ) : route.page === 'credits' ? (
+            <Credits />
           ) : (
             <Browse />
           )}
         </ErrorBoundary>
       </main>
       <Toast />
-      <PlayerBar />
+      {!landing && <PlayerBar />}
       {route.page === 'play' && known && locked && (
         <ConnectOverlay
           title={entries.find((e) => e.id === route.id)?.title ?? ''}
