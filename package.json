@@ -17,6 +17,7 @@
     "manifest": "tsx scripts/manifest.ts",
     "render": "tsx scripts/render.ts",
     "compare": "tsx scripts/compare.ts",
+    "fetch-soundfont": "tsx scripts/fetch-soundfont.ts",
     "format": "prettier --write .",
     "check": "tsc -b && eslint . && prettier --check . && vitest run"
   },

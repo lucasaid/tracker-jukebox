@@ -1,6 +1,13 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { ByteReader, ParseError, decodeCp437, detectFormat, parseFile } from './index'
+import {
+  ByteReader,
+  ParseError,
+  decodeCp437,
+  detectFormat,
+  parseFile,
+  parseSoundBank,
+} from './index'
 import { parseMod } from './mod'
 import { parseStm } from './stm'
 import type { Format, Song } from './index'
@@ -209,5 +216,25 @@ describe('MIDI parser', () => {
       new Uint8Array([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, fmt, 0, 0, div >> 8, div & 255])
     expect(() => parseFile(hdr(2, 96))).toThrow('SMF format 2')
     expect(() => parseFile(hdr(1, 0xe728))).toThrow('SMPTE timing')
+  })
+})
+
+const BANK_PATH = 'public/soundfonts/GeneralUser-GS.sf2'
+describe.skipIf(!existsSync(BANK_PATH))('SF2 parser', () => {
+  const bank = parseSoundBank(new Uint8Array(readFileSync(BANK_PATH)))
+  it('has ≥ 128 presets in bank 0 and a drum kit at bank 128', () => {
+    const bank0 = [...bank.presets.keys()].filter((k) => k < 128)
+    expect(bank0.length).toBeGreaterThanOrEqual(128)
+    expect(bank.presets.has(128 * 128)).toBe(true)
+  })
+  it('every zone has keyLo ≤ keyHi and data', () => {
+    for (const p of bank.presets.values())
+      for (const z of p.zones) {
+        expect(z.keyLo).toBeLessThanOrEqual(z.keyHi)
+        expect(z.data.length).toBeGreaterThan(0)
+      }
+  })
+  it('rejects non-SF2 input', () => {
+    expect(() => parseSoundBank(new Uint8Array(64))).toThrow(ParseError)
   })
 })

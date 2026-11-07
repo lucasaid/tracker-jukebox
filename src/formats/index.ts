@@ -1,6 +1,7 @@
 import { UnsupportedFormatError } from './bytes'
 import { parse669 } from './669'
 import { parseMidi } from './midi'
+import { parseSf2 } from './sf2'
 import { parseMod } from './mod'
 import { parseMtm } from './mtm'
 import { parseS3m } from './s3m'
@@ -46,6 +47,6 @@ export function parseFile(bytes: Uint8Array, opts?: { midiTarget?: MidiTarget })
 }
 
 /** Throws ParseError. */
-export function parseSoundBank(_bytes: Uint8Array): SoundBank {
-  throw new Error('Not implemented (P24)')
+export function parseSoundBank(bytes: Uint8Array): SoundBank {
+  return parseSf2(bytes)
 }
