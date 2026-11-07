@@ -146,6 +146,14 @@ export function Browse() {
               >
                 ★ only
               </Chip>
+              {(query !== '' ||
+                chips.formats.length > 0 ||
+                chips.channels.length > 0 ||
+                chips.favoritesOnly) && (
+                <button className={styles.chip} onClick={() => setFilters(EMPTY_FILTERS)}>
+                  RESET
+                </button>
+              )}
             </div>
             {entries.length === 0 ? (
               <p className={styles.note}>Loading…</p>
