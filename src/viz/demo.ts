@@ -41,6 +41,34 @@ export const idle = (ctx: CanvasRenderingContext2D, f: Frame | null): void => {
   ctx.fillRect(0, 0, f?.width ?? ctx.canvas.clientWidth, f?.height ?? ctx.canvas.clientHeight)
 }
 
+/** The plasma palette is split into this many colour bands; band b follows channels b, b + 8, … */
+const PLASMA_BANDS = 8
+const MAX_CHANNELS = 64
+/** Plasma modes, in click order. */
+const SWELL = 0 // blobs puff out and their hot cores flash on any beat
+const CHANNELS = 1 // each colour band lights up on its own channel's hits
+const RIPPLES = 2 // each note drops a ripple at its channel's spot that bends the pattern
+const SPECTRUM = 3 // bass / mids / treble drive the plasma's waves
+const WOBBLE = 4 // the audio waveform pushes each row sideways
+const KICK = 5 // the palette cycles with the tempo and jumps ahead on beats
+const PLASMA_MODES = 6
+const MAX_RIPPLES = 24
+const RIPPLE_LIFE_SEC = 1.6
+/** ring speed in plasma cells per second */
+const RIPPLE_SPEED = 40
+/** palette steps per second at the default 125 BPM / speed 6 */
+const KICK_CYCLE = 20
+
+/** Mean of freq[lo..hi) scaled to 0..1. */
+const level = (freq: Uint8Array, lo: number, hi: number): number => {
+  let sum = 0
+  for (let i = lo; i < hi; i++) sum += freq[i] ?? 0
+  return sum / ((hi - lo) * 255)
+}
+/** Fast attack, slower release, so bands punch in and settle back. */
+const follow = (cur: number, target: number, dt: number): number =>
+  cur + (target - cur) * Math.min(1, dt * (target > cur ? 20 : 5))
+
 function plasmaInstance(): VisualizerInstance {
   const drive = createDrive()
   const skip = createStill()
@@ -53,7 +81,22 @@ function plasmaInstance(): VisualizerInstance {
     lut[i * 3 + 2] = 128 + 127 * Math.sin((i / 256) * TAU + 4.2)
   }
   let t = 0
+  /** per-channel pulse, 1 on a trigger, decaying over PULSE_SEC; bands take the max of theirs */
+  const chPulse = new Float32Array(MAX_CHANNELS)
+  const bandPulse = new Float32Array(PLASMA_BANDS)
+  /** ring buffer of ripples: x, y (cells), age (s), amplitude; age >= life means unused */
+  const ripples = new Float32Array(MAX_RIPPLES * 4)
+  for (let r = 0; r < MAX_RIPPLES; r++) ripples[r * 4 + 2] = RIPPLE_LIFE_SEC
+  let nextRipple = 0
+  let bass = 0
+  let mid = 0
+  let high = 0
+  let palettePhase = 0
+  let mode = SWELL
   return {
+    click() {
+      mode = (mode + 1) % PLASMA_MODES
+    },
     draw(ctx, f, dt) {
       if (!f || !sctx) return idle(ctx, f)
       if (skip(f)) return
@@ -65,20 +108,96 @@ function plasmaInstance(): VisualizerInstance {
         small.width = cols
         small.height = rows
       }
+      const chs = f.snap.ch
+      const nCh = Math.min(chs.length, MAX_CHANNELS)
+      const nBands = Math.max(1, Math.min(nCh, PLASMA_BANDS))
+      bandPulse.fill(0)
+      for (let c = 0; c < nCh; c++) {
+        const ch = chs[c]
+        const p = ch?.triggered ? 1 : Math.max(0, (chPulse[c] ?? 0) - dt / PULSE_SEC)
+        chPulse[c] = p
+        const b = c % nBands
+        bandPulse[b] = Math.max(bandPulse[b] ?? 0, p)
+        // a channel's ripples start from its own spot: across by pan, down by channel number
+        if (mode === RIPPLES && ch?.triggered && !f.reducedMotion) {
+          const o = nextRipple * 4
+          ripples[o] = cols * (0.15 + 0.35 * (ch.pan + 1))
+          ripples[o + 1] = rows * (0.15 + 0.7 * ((c * 0.618034) % 1))
+          ripples[o + 2] = 0
+          ripples[o + 3] = 0.4 + 0.6 * ch.volume
+          nextRipple = (nextRipple + 1) % MAX_RIPPLES
+        }
+      }
+      for (let r = 0; r < MAX_RIPPLES; r++) ripples[r * 4 + 2] = (ripples[r * 4 + 2] ?? 0) + dt
+      // ~21 Hz per bin at 44.1 kHz: bass ≈ 20–130 Hz, mids ≈ 200–2000 Hz, treble ≈ 3–10 kHz
+      bass = follow(bass, level(f.freq, 1, 7), dt)
+      mid = follow(mid, level(f.freq, 10, 90), dt)
+      high = follow(high, level(f.freq, 150, 450), dt)
+      const pos = f.snap.pos
+      const rowsPerSec = pos.kind === 'tracker' ? (pos.tempo * 0.4) / Math.max(1, pos.speed) : 8.33
+      const tempo = Math.min(4, Math.max(0.25, rowsPerSec / 8.33))
+      // the beat pulse decays over PULSE_SEC, so each beat pushes the palette ~25 steps ahead
+      if (mode === KICK && !f.reducedMotion)
+        palettePhase = (palettePhase + dt * (KICK_CYCLE * tempo + 200 * pulse)) % 256
+      const shift = mode === KICK ? Math.floor(palettePhase) : 0
+
       const img = sctx.createImageData(cols, rows)
-      const bright = 0.35 + 0.5 * intensity + 0.15 * pulse
+      const bright = 0.35 + 0.5 * intensity
+      // swell mode zooms the field in around the centre on a beat, so the blobs puff out
+      const zoom = mode === SWELL ? 1 - 0.12 * pulse : 1
+      // spectrum mode: treble sharpens and boosts the fine wave, mids the cross waves,
+      // bass surges the big circular ripple outwards
+      const spec = mode === SPECTRUM
+      const aHigh = spec ? 0.5 + 1.5 * high : 1
+      const fHigh = spec ? 0.16 * (1 + 1.5 * high) : 0.16
+      const aMid = spec ? 0.5 + 1.5 * mid : 1
+      const aBass = spec ? 0.5 + 2 * bass : 1
+      const pBass = spec ? bass * 3 : 0
       for (let y = 0; y < rows; y++) {
+        const ys = rows / 2 + (y - rows / 2) * zoom
+        // wobble mode: this row's slice of the waveform pushes it sideways
+        const wob =
+          mode === WOBBLE ? (f.time[Math.floor((y / rows) * f.time.length)] ?? 0) * cols * 0.3 : 0
         for (let x = 0; x < cols; x++) {
-          const v =
-            Math.sin(x * 0.16 + t) +
-            Math.sin(y * 0.22 + t * 1.3) +
-            Math.sin((x + y) * 0.1 + t * 0.7) +
-            Math.sin(Math.hypot(x - cols / 2, y - rows / 2) * 0.25 - t)
-          const i = (Math.floor((v + 4) * 32) & 255) * 3
+          const xs = cols / 2 + (x - cols / 2) * zoom + wob
+          let v =
+            aHigh * Math.sin(xs * fHigh + t) +
+            aMid * Math.sin(ys * 0.22 + t * 1.3) +
+            aMid * Math.sin((xs + ys) * 0.1 + t * 0.7) +
+            aBass * Math.sin(Math.hypot(xs - cols / 2, ys - rows / 2) * 0.25 - t - pBass)
+          if (mode === RIPPLES) {
+            for (let r = 0; r < MAX_RIPPLES; r++) {
+              const age = ripples[r * 4 + 2] ?? RIPPLE_LIFE_SEC
+              if (age >= RIPPLE_LIFE_SEC) continue
+              const d = Math.hypot(xs - (ripples[r * 4] ?? 0), ys - (ripples[r * 4 + 1] ?? 0))
+              const front = d - age * RIPPLE_SPEED
+              if (front < -12 || front > 12) continue
+              const env = Math.exp(-(front * front) / 18) * (1 - age / RIPPLE_LIFE_SEC)
+              v += 2.2 * (ripples[r * 4 + 3] ?? 0) * env * Math.sin(front * 0.8)
+            }
+          }
+          const idx = Math.floor((v + 4) * 32) & 255
+          const i = ((idx + shift) & 255) * 3
           const o = (y * cols + x) * 4
-          img.data[o] = (lut[i] ?? 0) * bright
-          img.data[o + 1] = (lut[i + 1] ?? 0) * bright
-          img.data[o + 2] = (lut[i + 2] ?? 0) * bright
+          const r = lut[i] ?? 0
+          const g = lut[i + 1] ?? 0
+          const b = lut[i + 2] ?? 0
+          let k = bright
+          if (mode === SWELL) {
+            // only the hot cores flash: how far the colour is into the top 30% of its range
+            const core = Math.max(0, Math.max(r, g, b) / 255 - 0.7) / 0.3
+            k = bright * (1 + 0.9 * pulse * core)
+          } else if (mode === CHANNELS) {
+            // each colour band follows a channel: its blobs light up on that channel's hits,
+            // most in the middle of the band so the edges stay soft
+            const p = (idx / 256) * nBands
+            const band = Math.floor(p)
+            const centre = 1 - Math.abs(2 * (p - band) - 1) * 0.6
+            k = bright * (1 + 0.9 * (bandPulse[band] ?? 0) * centre)
+          }
+          img.data[o] = r * k
+          img.data[o + 1] = g * k
+          img.data[o + 2] = b * k
           img.data[o + 3] = 255
         }
       }
