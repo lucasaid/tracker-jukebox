@@ -4,6 +4,7 @@ import { ErrorBoundary } from './ui/components/ErrorBoundary'
 import { PlayerBar } from './ui/components/PlayerBar'
 import { Toast, showToast } from './ui/components/Toast'
 import { Browse } from './ui/pages/Browse'
+import { Jukebox } from './ui/pages/Jukebox'
 import { NowPlaying } from './ui/pages/NowPlaying'
 import { PlayerProvider, usePlayer } from './state/PlayerContext'
 import { useHashRoute } from './state/route'
@@ -68,6 +69,8 @@ function Shell() {
         if (snap?.pos.kind === 'tracker') engine.seek({ order: Math.max(0, snap.pos.order + d) })
         else if (snap) engine.seek({ seconds: Math.max(0, snap.seconds + d * 10) })
         consume()
+      } else if (e.key === 'n' || e.key === 'N') {
+        void player.next()
       } else if (e.key === 'v' || e.key === 'V') {
         const i = visualizers.findIndex((v) => v.id === settings.player.lastViz)
         const next = visualizers[(i + 1) % visualizers.length]
@@ -102,7 +105,13 @@ function Shell() {
       </header>
       <main className={styles.main}>
         <ErrorBoundary>
-          {route.page === 'play' && known ? <NowPlaying /> : <Browse />}
+          {route.page === 'play' && known ? (
+            <NowPlaying />
+          ) : route.page === 'jukebox' ? (
+            <Jukebox />
+          ) : (
+            <Browse />
+          )}
         </ErrorBoundary>
       </main>
       <Toast />

@@ -3,6 +3,7 @@ import { afterEach, describe as suite, expect, it, vi } from 'vitest'
 import { parseFile } from '../formats'
 import { LoadError } from '../net'
 import { describe, loadManifest } from './manifest'
+import { createQueue } from './shuffle'
 import { EMPTY_FILTERS, filterEntries, sortEntries } from './search'
 import type { ManifestEntry } from './manifest'
 
@@ -125,5 +126,61 @@ suite('search', () => {
     const copy = [...list]
     sortEntries(list, 'title', 'asc')
     expect(list).toEqual(copy)
+  })
+})
+
+suite('queue', () => {
+  const rngFrom = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const ten = Array.from({ length: 10 }, (_, i) => `s${i}`)
+  const pass = (q: ReturnType<typeof createQueue>) => {
+    const out = [q.current() as string]
+    for (let i = 1; i < 10; i++) out.push(q.next() as string)
+    return out
+  }
+
+  it('plays every id once per pass, and the next pass does not open with the last id', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const q = createQueue(ten, true, rngFrom(seed))
+      const first = pass(q)
+      expect(new Set(first).size).toBe(10)
+      expect(q.next()).not.toBe(first[9])
+      expect(new Set([q.current(), ...pass2(q)]).size).toBe(10)
+    }
+    function pass2(q: ReturnType<typeof createQueue>) {
+      return Array.from({ length: 9 }, () => q.next())
+    }
+  })
+  it('keeps the given order when not shuffling, and wraps', () => {
+    const q = createQueue(['a', 'b', 'c'], false)
+    expect([q.current(), q.next(), q.next(), q.next()]).toEqual(['a', 'b', 'c', 'a'])
+  })
+  it('prev walks back through history and stays put at the start; next replays it', () => {
+    const q = createQueue(['a', 'b', 'c'], false)
+    q.next()
+    q.next()
+    expect([q.prev(), q.prev(), q.prev()]).toEqual(['b', 'a', null])
+    expect(q.current()).toBe('a')
+    expect([q.next(), q.next(), q.next()]).toEqual(['b', 'c', 'a'])
+  })
+  it('rebuild keeps the current id and drops played ids from the rest of the pass', () => {
+    const q = createQueue(['a', 'b', 'c', 'd'], false)
+    q.next() // current b, played a b
+    q.rebuild(['a', 'b', 'c', 'd', 'e'], false)
+    expect(q.current()).toBe('b')
+    expect([q.next(), q.next(), q.next()]).toEqual(['c', 'd', 'e'])
+    q.rebuild(['x', 'e'], false) // current e is gone from the list but stays current
+    expect(q.current()).toBe('e')
+    expect(q.next()).toBe('x')
+  })
+  it('handles empty and single-id queues', () => {
+    const empty = createQueue([], true)
+    expect([empty.current(), empty.next(), empty.prev()]).toEqual([null, null, null])
+    const one = createQueue(['a'], true)
+    expect([one.current(), one.next(), one.next()]).toEqual(['a', 'a', 'a'])
   })
 })

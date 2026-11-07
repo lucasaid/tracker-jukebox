@@ -7,6 +7,9 @@ import type { SeekTarget } from '../engine'
 import { AudioEngine } from '../audio/AudioEngine'
 import type { EngineStatus } from '../audio/AudioEngine'
 import { describe, loadManifest } from '../library/manifest'
+import { filterEntries, sortEntries, EMPTY_FILTERS } from '../library/search'
+import { createQueue } from '../library/shuffle'
+import type { Queue } from '../library/shuffle'
 import type { ManifestEntry } from '../library/manifest'
 import { LoadError } from '../net'
 import { useSettings } from './SettingsContext'
@@ -34,12 +37,23 @@ export interface PlayerApi {
   toggleFavorite(id: string): void // local ids are ignored
   /** Rejects with Error('File too large (max 16 MB)') | Error('Not a supported music file') | the parse error. Never uploads. */
   addLocal(file: File): Promise<ManifestEntry>
+  /** Builds the Queue from settings.jukebox and entries, sets mode 'jukebox' and plays the first song. Rejects Error('No songs match the jukebox filter'). */
+  startJukebox(): Promise<void>
+  next(): Promise<void> // jukebox mode only; no-op in single mode
+  prev(): Promise<void>
 }
 
 const Ctx = createContext<PlayerApi | null>(null)
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1'
 const MANIFEST_URL = './manifest.json'
 const MAX_LOCAL_BYTES = 16 * 1024 * 1024
+const FAIL_LIMIT = 3
+const TICK_MS = 250
+const FADE_LEAD_SEC = 4
+/** Same event Toast listens to; state may not import ui, so the name is repeated here. */
+const toast = (text: string): void => {
+  window.dispatchEvent(new CustomEvent<string>('tj-toast', { detail: text }))
+}
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings()
@@ -55,6 +69,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [manifestError, setManifestError] = useState<LoadError | null>(null)
   const [manifestTry, setManifestTry] = useState(0)
   const [muteMask, setMuteMask] = useState(0)
+  const [mode, setMode] = useState<'single' | 'jukebox'>('single')
+  const queue = useRef<Queue | null>(null)
+  const fails = useRef(0)
+  /** the Loaded object whose successor was already requested, so each song advances once */
+  const advancedFrom = useRef<unknown>(null)
 
   useEffect(() => {
     return engine.on((e) => {
@@ -96,6 +115,99 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     engine.setOptions({ interpolation, stereoSeparation })
   }, [engine, interpolation, stereoSeparation])
 
+  /** Loads and starts a song. false if it failed (the engine already reported why). */
+  const playSong = async (
+    id: string,
+    opts?: { seek?: SeekTarget; fadeSec?: number; midiTarget?: MidiTarget },
+  ): Promise<boolean> => {
+    const local = localsRef.current.find((l) => l.entry.id === id)
+    const entry = local?.entry ?? manifestEntries.find((e) => e.id === id)
+    if (!entry) throw new Error('Song not found')
+    await engine.unlock()
+    // Mutes belong to one song, so a new song starts unmuted.
+    setMuteMask(0)
+    engine.setOptions({ muteMask: 0 })
+    try {
+      await engine.load(local ? { id, parsed: local.parsed } : { id, url: entry.url ?? '' }, {
+        seek: opts?.seek,
+        fadeSec: opts?.fadeSec,
+        midiTarget: opts?.midiTarget ?? entry.midiTarget ?? undefined,
+      })
+      return true
+    } catch {
+      // The engine already reported the failure as an 'error' event (logged above); a newer
+      // load aborting this one is not an error either.
+      return false
+    }
+  }
+
+  const jukeIds = (): string[] => {
+    const j = settings.jukebox
+    const filters = { ...EMPTY_FILTERS, formats: j.formats, favoritesOnly: j.favoritesOnly }
+    return sortEntries(filterEntries(entries, filters, favorites), 'title', 'asc').map((e) => e.id)
+  }
+
+  /** Plays what `pick` returns; a song that fails is skipped, and FAIL_LIMIT failures in a row stop the jukebox. */
+  const playQueued = async (pick: () => string | null, fadeSec: number): Promise<void> => {
+    for (;;) {
+      const id = pick()
+      if (id === null) return
+      if (await playSong(id, { fadeSec })) {
+        fails.current = 0
+        return
+      }
+      if (++fails.current >= FAIL_LIMIT) {
+        fails.current = 0
+        queue.current = null
+        setMode('single')
+        engine.pause()
+        toast(`Jukebox stopped: ${FAIL_LIMIT} songs in a row failed to load`)
+        return
+      }
+    }
+  }
+
+  // Timers and the 'ended' event read the latest closures through this ref.
+  const live = useRef({ jukeIds, playQueued, jukebox: settings.jukebox })
+  useEffect(() => {
+    live.current = { jukeIds, playQueued, jukebox: settings.jukebox }
+  })
+
+  // Keep the queue in step with the jukebox settings, the favorites and the entry list.
+  const { formats, favoritesOnly, shuffle } = settings.jukebox
+  useEffect(() => {
+    if (mode === 'jukebox') queue.current?.rebuild(live.current.jukeIds(), shuffle)
+  }, [mode, formats, favoritesOnly, shuffle, favorites, locals])
+
+  // Advance when a song ends, or when it is time to start the fade into the next one.
+  useEffect(() => {
+    if (mode !== 'jukebox') return
+    const advance = (fadeSec: number): void => {
+      const q = queue.current
+      if (!q) return
+      advancedFrom.current = engine.current
+      void live.current.playQueued(() => q.next(), fadeSec)
+    }
+    const timer = setInterval(() => {
+      const cur = engine.current
+      if (!cur || engine.status !== 'playing' || advancedFrom.current === cur) return
+      const { fade, maxLengthMin } = live.current.jukebox
+      const cap = maxLengthMin * 60
+      const limit = cap > 0 ? Math.min(cur.durationSec, cap) : cur.durationSec
+      const lead = fade ? Math.min(FADE_LEAD_SEC, limit / 2) : 0
+      const secs = engine.latest()?.snap.seconds ?? 0
+      // Without a fade, the song's own end is handled by the 'ended' event below.
+      if (secs >= limit - lead && (fade || (cap > 0 && secs >= cap))) advance(lead)
+    }, TICK_MS)
+    const off = engine.on((e) => {
+      if (e.type === 'ended' && advancedFrom.current !== engine.current) advance(0)
+    })
+    return () => {
+      clearInterval(timer)
+      off()
+    }
+  }, [mode, engine])
+
   const api: PlayerApi = {
     engine,
     status,
@@ -103,26 +215,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     entries,
     manifestError,
     retryManifest: () => setManifestTry((n) => n + 1),
-    mode: 'single',
+    mode,
     muteMask,
     async play(id, opts) {
-      const local = localsRef.current.find((l) => l.entry.id === id)
-      const entry = local?.entry ?? manifestEntries.find((e) => e.id === id)
-      if (!entry) throw new Error('Song not found')
-      await engine.unlock()
-      // Mutes belong to one song, so a new song starts unmuted.
-      setMuteMask(0)
-      engine.setOptions({ muteMask: 0 })
-      try {
-        await engine.load(local ? { id, parsed: local.parsed } : { id, url: entry.url ?? '' }, {
-          seek: opts?.seek,
-          fadeSec: opts?.fadeSec,
-          midiTarget: opts?.midiTarget ?? entry.midiTarget ?? undefined,
-        })
-      } catch {
-        // The engine already reported the failure as an 'error' event (logged above); a newer
-        // load aborting this one is not an error either.
-      }
+      queue.current = null
+      setMode('single')
+      await playSong(id, opts)
     },
     toggle() {
       if (status === 'playing') engine.pause()
@@ -147,6 +245,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!next.delete(id)) next.add(id)
       setFavorites(next)
       saveFavorites(next)
+    },
+    async startJukebox() {
+      const ids = jukeIds()
+      if (ids.length === 0) throw new Error('No songs match the jukebox filter')
+      const q = createQueue(ids, settings.jukebox.shuffle)
+      queue.current = q
+      fails.current = 0
+      advancedFrom.current = null
+      setMode('jukebox')
+      let first = true // the queue's opening song, then onwards if it fails
+      await playQueued(() => (first ? ((first = false), q.current()) : q.next()), 0)
+    },
+    async next() {
+      const q = queue.current
+      if (mode === 'jukebox' && q) await playQueued(() => q.next(), 0)
+    },
+    async prev() {
+      const q = queue.current
+      if (mode === 'jukebox' && q) await playQueued(() => q.prev(), 0)
     },
     async addLocal(file) {
       if (file.size > MAX_LOCAL_BYTES) throw new Error('File too large (max 16 MB)')

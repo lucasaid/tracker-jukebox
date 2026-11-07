@@ -42,23 +42,32 @@ interface Stamped {
   snap: Snapshot
 }
 
+/** One worklet node and its gain. Messages are matched against this deck's own song id. */
+interface Deck {
+  node: AudioWorkletNode
+  gain: GainNode
+  /** id of the song this deck holds or is loading; messages for other ids are stale */
+  activeId: string | null
+  loaded: Loaded | null
+  snapshots: Stamped[]
+  lastPick: Stamped | null
+  waiting: { id: string; ok: () => void; fail: (e: Error) => void } | null
+}
+
 const abortError = (): DOMException => new DOMException('Load aborted', 'AbortError')
 
 export class AudioEngine {
   private ctx: AudioContext | null = null
-  private node: AudioWorkletNode | null = null
+  private decks: Deck[] = []
+  /** index of the deck that is audible and that play/pause/seek/latest act on */
+  private front = 0
   private analyserNode: AnalyserNode | null = null
   private unlocking: Promise<void> | null = null
   private state: EngineStatus = 'locked'
-  private loaded: Loaded | null = null
-  /** id of the song the worklet currently holds or is loading; messages for other ids are stale */
-  private activeId: string | null = null
   private abort: AbortController | null = null
   private options: PlayerOptions = { ...DEFAULT_PLAYER_OPTIONS }
-  private snapshots: Stamped[] = []
-  private lastPick: Stamped | null = null
   private listeners = new Set<(e: EngineEvent) => void>()
-  private waiting: { id: string; ok: () => void; fail: (e: PlaybackError) => void } | null = null
+  private fadeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly debug: boolean
 
   constructor(opts?: { debug?: boolean; soundFontUrl?: string }) {
@@ -69,11 +78,18 @@ export class AudioEngine {
     return typeof AudioContext !== 'undefined' && typeof AudioWorkletNode !== 'undefined'
   }
 
+  private get deck(): Deck | undefined {
+    return this.decks[this.front]
+  }
+  private get back(): Deck | undefined {
+    return this.decks[1 - this.front]
+  }
+
   get status(): EngineStatus {
     return this.state
   }
   get current(): Loaded | null {
-    return this.loaded
+    return this.deck?.loaded ?? null
   }
   get context(): AudioContext | null {
     return this.ctx
@@ -88,11 +104,11 @@ export class AudioEngine {
 
   private setStatus(status: EngineStatus): void {
     this.state = status
-    this.emit({ type: 'status', status, current: this.loaded })
+    this.emit({ type: 'status', status, current: this.current })
   }
 
-  private send(m: ToWorklet): void {
-    this.node?.port.postMessage(m)
+  private send(deck: Deck | undefined, m: ToWorklet): void {
+    deck?.node.port.postMessage(m)
   }
 
   unlock(): Promise<void> {
@@ -110,48 +126,76 @@ export class AudioEngine {
     const ctx = new AudioContext()
     this.ctx = ctx
     await ctx.audioWorklet.addModule(workletUrl)
-    const node = new AudioWorkletNode(ctx, PROCESSOR_NAME, {
-      numberOfInputs: 0,
-      outputChannelCount: [2],
-    })
-    const gain = ctx.createGain()
     const analyser = ctx.createAnalyser()
     analyser.fftSize = 2048
-    node.connect(gain).connect(analyser).connect(ctx.destination)
-    node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorklet(e.data)
-    this.node = node
+    analyser.connect(ctx.destination)
+    for (let i = 0; i < 2; i++) {
+      const node = new AudioWorkletNode(ctx, PROCESSOR_NAME, {
+        numberOfInputs: 0,
+        outputChannelCount: [2],
+      })
+      const gain = ctx.createGain()
+      node.connect(gain).connect(analyser)
+      const deck: Deck = {
+        node,
+        gain,
+        activeId: null,
+        loaded: null,
+        snapshots: [],
+        lastPick: null,
+        waiting: null,
+      }
+      node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorklet(deck, e.data)
+      this.decks.push(deck)
+      if (this.debug) this.send(deck, { type: 'debug', enabled: true })
+    }
     this.analyserNode = analyser
-    if (this.debug) this.send({ type: 'debug', enabled: true })
     this.state = 'idle'
     this.emit({ type: 'status', status: 'idle', current: null })
   }
 
-  private onWorklet(m: FromWorklet): void {
-    if (m.id !== this.activeId) return
+  private onWorklet(deck: Deck, m: FromWorklet): void {
+    if (m.id !== deck.activeId) return
+    const audible = deck === this.deck
     switch (m.type) {
       case 'loaded':
-        this.waiting?.ok()
+        deck.waiting?.ok()
         break
       case 'snapshot':
-        this.snapshots.push({ at: m.at, snap: m.snap })
-        if (this.snapshots.length > KEPT_SNAPSHOTS) this.snapshots.shift()
+        deck.snapshots.push({ at: m.at, snap: m.snap })
+        if (deck.snapshots.length > KEPT_SNAPSHOTS) deck.snapshots.shift()
         break
       case 'ended':
+        if (!audible) break // the song fading out underneath a crossfade
         if (this.state === 'playing') this.setStatus('paused')
         this.emit({ type: 'ended', id: m.id })
         break
       case 'error': {
         const error = new PlaybackError(m.message, m.id)
-        if (this.waiting) this.waiting.fail(error)
-        else {
+        if (deck.waiting) deck.waiting.fail(error)
+        else if (audible) {
           if (this.state === 'playing') this.setStatus('paused')
           this.emit({ type: 'error', error })
         }
         break
       }
       case 'stats':
-        this.emit({ type: 'stats', stats: m.stats })
+        if (audible) this.emit({ type: 'stats', stats: m.stats })
         break
+    }
+  }
+
+  /** Ends a crossfade early: the deck that was fading out is silenced and emptied. */
+  private settleFade(): void {
+    if (this.fadeTimer !== null) clearTimeout(this.fadeTimer)
+    this.fadeTimer = null
+    const back = this.back
+    if (back) {
+      back.gain.gain.cancelScheduledValues(0)
+      back.gain.gain.value = 0
+      this.send(back, { type: 'unload' })
+      back.loaded = null
+      back.activeId = null
     }
   }
 
@@ -159,11 +203,14 @@ export class AudioEngine {
     src: SongSource,
     opts?: { midiTarget?: MidiTarget; fadeSec?: number; seek?: SeekTarget; autoplay?: boolean },
   ): Promise<Loaded> {
-    if (!this.node) throw new PlaybackError('Audio is locked', src.id)
+    const ctx = this.ctx
+    if (!ctx || this.decks.length === 0) throw new PlaybackError('Audio is locked', src.id)
     this.abort?.abort()
     const abort = new AbortController()
     this.abort = abort
     const stale = (): boolean => abort.signal.aborted
+    const before: EngineStatus =
+      this.state === 'loading' ? (this.current ? 'paused' : 'idle') : this.state
     this.setStatus('loading')
     try {
       let song: ParsedFile
@@ -175,24 +222,48 @@ export class AudioEngine {
       }
       if (song.kind === 'midi') throw new PlaybackError('MIDI playback not available yet', src.id)
       const durationSec = computeLength(song).seconds
-      this.activeId = src.id
-      this.snapshots = []
-      this.lastPick = null
+
+      // Crossfade onto the idle deck only while something is actually audible.
+      this.settleFade()
+      const fadeSec = opts?.fadeSec ?? 0
+      const crossfade = fadeSec > 0 && before === 'playing' && this.current !== null
+      const target = crossfade ? this.back : this.deck
+      if (!target) throw new PlaybackError('Audio is locked', src.id)
+      target.activeId = src.id
+      target.snapshots = []
+      target.lastPick = null
       const ready = new Promise<void>((ok, fail) => {
-        this.waiting = { id: src.id, ok, fail }
+        target.waiting = { id: src.id, ok, fail }
+        abort.signal.addEventListener('abort', () => fail(abortError()))
       })
-      this.send({ type: 'load', id: src.id, song, options: this.options, seek: opts?.seek })
+      this.send(target, { type: 'load', id: src.id, song, options: this.options, seek: opts?.seek })
       await ready
-      this.waiting = null
+      target.waiting = null
       if (stale()) throw abortError()
-      this.loaded = { id: src.id, song, durationSec }
+      target.loaded = { id: src.id, song, durationSec }
+
+      const old = this.deck
+      if (crossfade && old && old !== target) {
+        const now = ctx.currentTime
+        target.gain.gain.cancelScheduledValues(now)
+        target.gain.gain.setValueAtTime(0, now)
+        target.gain.gain.linearRampToValueAtTime(1, now + fadeSec)
+        old.gain.gain.cancelScheduledValues(now)
+        old.gain.gain.setValueAtTime(old.gain.gain.value, now)
+        old.gain.gain.linearRampToValueAtTime(0, now + fadeSec)
+        this.front = this.decks.indexOf(target)
+        this.fadeTimer = setTimeout(() => this.settleFade(), fadeSec * 1000 + 100)
+      } else {
+        target.gain.gain.cancelScheduledValues(0)
+        target.gain.gain.value = 1
+      }
       this.setStatus('paused')
       if (opts?.autoplay !== false) this.play()
-      return this.loaded
+      return target.loaded
     } catch (err) {
+      for (const d of this.decks) d.waiting = null
       if (stale()) throw err instanceof DOMException ? err : abortError()
-      this.waiting = null
-      this.setStatus(this.loaded ? 'paused' : 'idle')
+      this.setStatus(before)
       this.emit({
         type: 'error',
         error: err as LoadError | ParseError | UnsupportedFormatError | PlaybackError,
@@ -202,58 +273,78 @@ export class AudioEngine {
   }
 
   play(): void {
-    if (!this.loaded) return
+    if (!this.current) return
     void this.ctx?.resume()
-    this.send({ type: 'play' })
+    this.send(this.deck, { type: 'play' })
     this.setStatus('playing')
   }
   pause(): void {
-    if (!this.loaded) return
-    this.send({ type: 'pause' })
+    if (!this.current) return
+    for (const d of this.decks) this.send(d, { type: 'pause' })
     this.setStatus('paused')
   }
   seek(to: SeekTarget): void {
-    if (this.loaded) this.send({ type: 'seek', to })
+    if (this.current) this.send(this.deck, { type: 'seek', to })
   }
   setOptions(o: Partial<PlayerOptions>): void {
     this.options = { ...this.options, ...o }
-    this.send({ type: 'options', options: o })
+    for (const d of this.decks) this.send(d, { type: 'options', options: o })
   }
-  fadeOut(_sec: number): Promise<void> {
-    throw new Error('Not implemented (P21)')
+
+  /** Linear fade to silence, then pause. The gain is restored afterwards so the next play is audible. */
+  fadeOut(sec: number): Promise<void> {
+    const ctx = this.ctx
+    const deck = this.deck
+    if (!ctx || !deck || !this.current || this.state !== 'playing') return Promise.resolve()
+    const now = ctx.currentTime
+    deck.gain.gain.cancelScheduledValues(now)
+    deck.gain.gain.setValueAtTime(deck.gain.gain.value, now)
+    deck.gain.gain.linearRampToValueAtTime(0, now + sec)
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // A new load in the meantime owns the deck; leave it alone.
+        if (this.deck === deck && this.state === 'playing') {
+          this.pause()
+          deck.gain.gain.cancelScheduledValues(0)
+          deck.gain.gain.value = 1
+        }
+        resolve()
+      }, sec * 1000)
+    })
   }
 
   latest(): { snap: Snapshot; song: ParsedFile } | null {
     const ctx = this.ctx
-    if (!ctx || !this.loaded) return null
+    const deck = this.deck
+    if (!ctx || !deck?.loaded) return null
     const horizonSec = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0)
     let pick: Stamped | undefined
-    for (let i = this.snapshots.length - 1; i >= 0; i--) {
-      const s = this.snapshots[i]
+    for (let i = deck.snapshots.length - 1; i >= 0; i--) {
+      const s = deck.snapshots[i]
       if (s && s.at / ctx.sampleRate <= horizonSec) {
         pick = s
         break
       }
     }
-    pick ??= this.snapshots[0]
+    pick ??= deck.snapshots[0]
     if (!pick) return null
     // ChannelState.triggered is true in one snapshot only. Carry the flags of snapshots skipped
     // since the last pick into this one, and report each trigger once.
     // ponytail: one consumer at a time, a second latest() caller would miss triggers.
     const flags = pick.snap.ch
-    if (pick === this.lastPick) for (const c of flags) c.triggered = false
+    if (pick === deck.lastPick) for (const c of flags) c.triggered = false
     else {
-      const from = this.lastPick?.at ?? -1
-      for (const s of this.snapshots) {
+      const from = deck.lastPick?.at ?? -1
+      for (const s of deck.snapshots) {
         if (s.at <= from || s.at >= pick.at) continue
         s.snap.ch.forEach((c, i) => {
           const t = flags[i]
           if (c.triggered && t) t.triggered = true
         })
       }
-      this.lastPick = pick
+      deck.lastPick = pick
     }
-    return { snap: pick.snap, song: this.loaded.song }
+    return { snap: pick.snap, song: deck.loaded.song }
   }
 
   on(listener: (e: EngineEvent) => void): () => void {
@@ -263,10 +354,13 @@ export class AudioEngine {
 
   async dispose(): Promise<void> {
     this.abort?.abort()
+    if (this.fadeTimer !== null) clearTimeout(this.fadeTimer)
     this.listeners.clear()
-    this.node?.port.close()
-    this.node = null
-    this.loaded = null
+    for (const d of this.decks) {
+      d.node.port.close()
+      d.loaded = null
+    }
+    this.decks = []
     const ctx = this.ctx
     this.ctx = null
     await ctx?.close()

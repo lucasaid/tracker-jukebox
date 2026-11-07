@@ -10,7 +10,7 @@ export const formatTime = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 export function PlayerBar() {
-  const { engine, status, current, toggle } = usePlayer()
+  const { engine, status, current, toggle, mode, prev, next } = usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
 
@@ -30,10 +30,20 @@ export function PlayerBar() {
       >
         {status === 'playing' ? '❚❚' : '▶'}
       </button>
+      {mode === 'jukebox' && (
+        <button className={styles.btn} aria-label="Previous song" onClick={() => void prev()}>
+          PREV
+        </button>
+      )}
       <span className={styles.barTitle}>
         {current ? current.title || current.file : 'Nothing playing'} ·{' '}
         {current ? formatTime(sec) : '0:00'} / {total}
       </span>
+      {mode === 'jukebox' && (
+        <button className={styles.btn} aria-label="Next song" onClick={() => void next()}>
+          NEXT
+        </button>
+      )}
       {current && (
         <a href={formatRoute({ page: 'play', id: current.id, seek: null })} className={styles.btn}>
           VIEW
