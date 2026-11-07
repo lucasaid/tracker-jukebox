@@ -37,6 +37,12 @@
   --link: #ffff55;
   --sel-bg: #0000aa;
   --sel-fg: #fff;
+  --text-glow: none;
+  --th-glow: none;
+  --btn-glow: none;
+  --viz-glow-filter: none;
+  --viz-glow-opacity: 0;
+  --rule-glow: none;
   --title-glow: none;
 
   --rule: var(--accent);
@@ -143,6 +149,12 @@
   --link: #ffd34d;
   --sel-bg: #4b5878;
   --sel-fg: #fff;
+  --text-glow: none;
+  --th-glow: none;
+  --btn-glow: none;
+  --viz-glow-filter: none;
+  --viz-glow-opacity: 0;
+  --rule-glow: none;
   --title-glow: none;
   --bevel-light: #8e9ccb;
   --bevel-dark: #12162a;
@@ -245,7 +257,14 @@
   --link: #22e6ff;
   --sel-bg: #3a0c5c;
   --sel-fg: #fff;
-  --title-glow: 0 0 8px currentColor;
+  --text-glow: 0 0 4px rgb(233 220 255 / 35%);
+  --th-glow: 0 0 6px #ff2bd6, 0 0 14px rgb(255 43 214 / 50%);
+  --btn-glow: 0 0 6px currentColor;
+  /* canvas visualizers: blurred, brightened copy screened on top (VisualizerHost) */
+  --viz-glow-filter: blur(6px) brightness(1.6) saturate(1.3);
+  --viz-glow-opacity: 0.85;
+  --rule-glow: 0 0 12px rgb(255 43 214 / 55%), 0 0 24px rgb(34 230 255 / 25%);
+  --title-glow: 0 0 6px currentColor, 0 0 16px currentColor;
 
   --rule: linear-gradient(90deg, #ff2bd6, #ffe66d, #22e6ff, #8a2bff, #ff2bd6) 0 0 / 200% 100%;
   --rule-height: 6px;
@@ -255,10 +274,10 @@
   --panel-border: 1px solid;
   --panel-border-color: #3a1f63;
   --panel-radius: 4px;
-  --panel-shadow: 0 0 24px rgb(255 43 214 / 12%);
+  --panel-shadow: 0 0 24px rgb(255 43 214 / 22%), inset 0 0 32px rgb(255 43 214 / 8%);
   --heading-bg: transparent;
   --heading-fg: #ffe66d;
-  --heading-glow: 0 0 6px #ffe66d;
+  --heading-glow: 0 0 6px #ffe66d, 0 0 16px rgb(255 230 109 / 55%);
   --heading-before: '';
   --heading-after: '';
   --heading-bleed: 0;
@@ -269,13 +288,13 @@
   --top-justify: center;
   --heading-deco: currentColor;
   --tag-fg: var(--dim);
-  --link-glow: 0 0 6px var(--accent);
+  --link-glow: 0 0 6px var(--accent), 0 0 14px rgb(34 230 255 / 55%);
   --input-border-width: 1px;
   --chip-bg: transparent;
   --chip-fg: var(--accent);
   --chip-pad: 4px 14px;
   --chip-border-width: 1px;
-  --chip-shadow: 0 0 8px rgb(34 230 255 / 35%);
+  --chip-shadow: 0 0 10px rgb(34 230 255 / 55%), inset 0 0 8px rgb(34 230 255 / 25%);
   --list-bg: transparent;
   --list-border-width: 0;
   --list-border-color: transparent;
@@ -289,7 +308,7 @@
   --btn-border-width: 1px;
   --btn-border-color: var(--accent);
   --btn-pad: 4px 14px;
-  --btn-shadow: 0 0 8px rgb(34 230 255 / 35%);
+  --btn-shadow: 0 0 10px rgb(34 230 255 / 55%), inset 0 0 8px rgb(34 230 255 / 25%);
   --btn-before: '';
   --btn-after: '';
   --btn-bracket: var(--accent);
@@ -311,10 +330,11 @@
   --bar-bg: rgb(7 0 15 / 90%);
   --bar-fg: var(--fg);
   --bar-border: 2px solid #ff2bd6;
-  --bar-shadow: 0 -4px 18px rgb(255 43 214 / 35%);
+  --bar-shadow: 0 -4px 24px rgb(255 43 214 / 55%);
 
   --logo-fill: linear-gradient(180deg, #ffe66d, #ff2bd6 45%, #22e6ff);
-  --logo-glow: drop-shadow(0 0 6px rgb(255 43 214 / 60%));
+  --logo-glow: drop-shadow(0 0 6px rgb(255 43 214 / 70%))
+    drop-shadow(0 0 18px rgb(34 230 255 / 35%));
   --cursor-blink: 0.8s;
 
   --pat-rownum: #6c4f96;
@@ -343,6 +363,12 @@
   --link: #ffff55;
   --sel-bg: #0000aa;
   --sel-fg: #fff;
+  --text-glow: none;
+  --th-glow: none;
+  --btn-glow: none;
+  --viz-glow-filter: none;
+  --viz-glow-opacity: 0;
+  --rule-glow: none;
   --title-glow: none;
   --bevel-light: #7783aa;
   --bevel-dark: #151a2e;
@@ -456,6 +482,7 @@ body {
   min-height: 100vh;
   font: var(--font-size) / var(--line) var(--font);
   color: var(--fg);
+  text-shadow: var(--text-glow);
   background:
     var(--bg-image) fixed,
     var(--bg);

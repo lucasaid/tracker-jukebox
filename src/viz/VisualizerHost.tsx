@@ -25,6 +25,17 @@ const TOKENS: readonly (readonly [keyof Palette, string])[] = [
   ['wave', '--scope-wave'],
 ]
 
+/** Glow overlay size vs. the canvas; the browser's upscale + the CSS blur do the softening. */
+const GLOW_SCALE = 0.25
+
+/** --viz-glow-opacity > 0 turns on the bloom overlay (see theme.css). */
+function readGlow(): boolean {
+  return (
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--viz-glow-opacity')) >
+    0
+  )
+}
+
 function readPalette(): Palette {
   const css = getComputedStyle(document.documentElement)
   const p: Palette = {
@@ -91,6 +102,7 @@ export function VisualizerHost(props: {
   const { vizId, engine, label, className, preview } = props
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const glowRef = useRef<HTMLCanvasElement>(null)
   const instanceRef = useRef<VisualizerInstance | null>(null)
   const [failedId, setFailedId] = useState<string | null>(null)
   const [aria, setAria] = useState(label)
@@ -105,9 +117,14 @@ export function VisualizerHost(props: {
     const instance = getVisualizer(id).create()
     instanceRef.current = instance
 
+    const glowCanvas = glowRef.current
+    const glowCtx = glowCanvas?.getContext('2d')
     let palette = readPalette()
+    let glow = readGlow()
     const themeObserver = new MutationObserver(() => {
       palette = readPalette()
+      glow = readGlow()
+      if (!glow) glowCtx?.clearRect(0, 0, glowCanvas?.width ?? 0, glowCanvas?.height ?? 0)
     })
     themeObserver.observe(document.documentElement, {
       attributes: true,
@@ -127,6 +144,10 @@ export function VisualizerHost(props: {
       canvas.width = Math.max(1, Math.round(size.width * dpr))
       canvas.height = Math.max(1, Math.round(size.height * dpr))
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      if (glowCanvas) {
+        glowCanvas.width = Math.max(1, Math.round(canvas.width * GLOW_SCALE))
+        glowCanvas.height = Math.max(1, Math.round(canvas.height * GLOW_SCALE))
+      }
     }
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(box)
@@ -152,6 +173,10 @@ export function VisualizerHost(props: {
       }
       try {
         instance.draw(ctx, f, dt)
+        // Bloom: a small copy on an overlay, so the main canvas (and any trails it keeps) is untouched.
+        if (glow && glowCanvas && glowCtx) {
+          glowCtx.drawImage(canvas, 0, 0, glowCanvas.width, glowCanvas.height)
+        }
       } catch (err) {
         // Stop now so it logs once; the re-render with the scope starts a fresh loop.
         cancelAnimationFrame(raf)
@@ -194,6 +219,20 @@ export function VisualizerHost(props: {
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
           instanceRef.current?.click?.(e.clientX - r.left, e.clientY - r.top)
+        }}
+      />
+      <canvas
+        ref={glowRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          mixBlendMode: 'screen',
+          filter: 'var(--viz-glow-filter)',
+          opacity: 'var(--viz-glow-opacity)',
         }}
       />
     </div>

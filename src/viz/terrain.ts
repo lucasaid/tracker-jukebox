@@ -1,4 +1,5 @@
 // 3D spectrum terrain: past spectra as ridge lines receding toward a horizon, newest at the front.
+// Themed: --scope-bg behind, --scope-wave ridges fading into the background with depth.
 import type { VisualizerDef, VisualizerInstance } from './types'
 
 const BANDS = 48
@@ -28,9 +29,10 @@ function terrainInstance(): VisualizerInstance {
     draw(ctx, f, dt) {
       const w = f?.width ?? ctx.canvas.clientWidth
       const h = f?.height ?? ctx.canvas.clientHeight
-      ctx.fillStyle = '#000'
+      ctx.fillStyle = f?.palette.bg ?? '#000'
       ctx.fillRect(0, 0, w, h)
       if (!f) return
+      const p = f.palette
       pendingSec += dt
       // ponytail: at most 4 rows per frame, so a long stall doesn't fill the field with one spectrum
       const steps = Math.min(4, Math.floor(pendingSec / ROW_SEC))
@@ -63,11 +65,12 @@ function terrainInstance(): VisualizerInstance {
           ctx.lineTo(x, baseY - ((rows[row + b] ?? 0) / 255) * ampY * s)
         }
         ctx.lineTo(cx + spanX * s * 0.5, baseY)
-        ctx.fillStyle = '#000'
+        ctx.fillStyle = p.bg
         ctx.fill()
-        const fade = 1 - z * 0.8
-        ctx.strokeStyle = `rgb(${Math.round(40 * fade)},${Math.round(255 * fade)},${Math.round(160 * fade)})`
+        ctx.strokeStyle = p.wave
+        ctx.globalAlpha = 1 - z * 0.8
         ctx.stroke()
+        ctx.globalAlpha = 1
       }
     },
   }
