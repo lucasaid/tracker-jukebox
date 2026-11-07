@@ -54,6 +54,23 @@
   --heading-before: '';
   --heading-after: '';
   --heading-bleed: var(--space-3); /* heading bar runs edge to edge of the panel */
+  --top-bg: transparent;
+  --top-border-width: 0;
+  --top-border-color: transparent;
+  --top-pad: 0;
+  --top-justify: flex-start;
+  --heading-deco: currentColor;
+  --tag-fg: var(--accent);
+  --link-glow: none;
+  --input-border-width: 0;
+  --chip-bg: transparent;
+  --chip-fg: var(--fg);
+  --chip-pad: 2px 8px;
+  --chip-border-width: 1px;
+  --chip-shadow: none;
+  --list-bg: transparent;
+  --list-border-width: 0;
+  --list-border-color: transparent;
 
   --well-bg: #000;
   --well-border-width: 1px;
@@ -147,6 +164,23 @@
   --heading-before: '';
   --heading-after: '';
   --heading-bleed: 0;
+  --top-bg: #4b5878;
+  --top-border-width: 2px;
+  --top-border-color: var(--raised);
+  --top-pad: 4px 8px;
+  --top-justify: space-between;
+  --heading-deco: currentColor;
+  --tag-fg: var(--fg);
+  --link-glow: none;
+  --input-border-width: 2px;
+  --chip-bg: #4b5878;
+  --chip-fg: var(--fg);
+  --chip-pad: 2px 12px;
+  --chip-border-width: 2px;
+  --chip-shadow: none;
+  --list-bg: #000;
+  --list-border-width: 2px;
+  --list-border-color: var(--sunken);
 
   --well-bg: #000;
   --well-border-width: 2px;
@@ -228,6 +262,23 @@
   --heading-before: '';
   --heading-after: '';
   --heading-bleed: 0;
+  --top-bg: transparent;
+  --top-border-width: 0;
+  --top-border-color: transparent;
+  --top-pad: 6px 0 0;
+  --top-justify: center;
+  --heading-deco: currentColor;
+  --tag-fg: var(--dim);
+  --link-glow: 0 0 6px var(--accent);
+  --input-border-width: 1px;
+  --chip-bg: transparent;
+  --chip-fg: var(--accent);
+  --chip-pad: 4px 14px;
+  --chip-border-width: 1px;
+  --chip-shadow: 0 0 8px rgb(34 230 255 / 35%);
+  --list-bg: transparent;
+  --list-border-width: 0;
+  --list-border-color: transparent;
 
   --well-bg: #07000f;
   --well-border-width: 0;
@@ -311,6 +362,23 @@
   --heading-before: '═╡ ';
   --heading-after: ' ╞═';
   --heading-bleed: 0;
+  --top-bg: transparent;
+  --top-border-width: 0;
+  --top-border-color: transparent;
+  --top-pad: 2px 0 0;
+  --top-justify: flex-start;
+  --heading-deco: var(--dim);
+  --tag-fg: var(--fg);
+  --link-glow: none;
+  --input-border-width: 1px;
+  --chip-bg: transparent;
+  --chip-fg: var(--fg);
+  --chip-pad: 2px 8px;
+  --chip-border-width: 1px;
+  --chip-shadow: none;
+  --list-bg: transparent;
+  --list-border-width: 0;
+  --list-border-color: transparent;
 
   --well-bg: #000;
   --well-border-width: 2px;
@@ -414,6 +482,7 @@ button {
 }
 a {
   color: var(--link);
+  text-shadow: var(--link-glow);
 }
 :focus-visible {
   outline: 2px solid var(--accent);
