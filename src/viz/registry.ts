@@ -8,6 +8,7 @@ import { pattern } from './pattern'
 import { scope } from './scope'
 import { spectrogram } from './spectrogram'
 import { superscope } from './superscope'
+import { swirl } from './swirl'
 import { terrain } from './terrain'
 import { vu } from './vu'
 import { warp } from './warp'
@@ -25,6 +26,7 @@ export const all: readonly VisualizerDef[] = [
   vu,
   warp,
   superscope,
+  swirl,
   plasma,
   starfield,
   copper,
