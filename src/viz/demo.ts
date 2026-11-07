@@ -106,7 +106,7 @@ function starfieldInstance(): VisualizerInstance {
       if (!f) return idle(ctx, f)
       if (skip(f)) return
       const { intensity, pulse } = drive(f, dt)
-      ctx.fillStyle = `rgb(${Math.round(pulse * 50)},${Math.round(pulse * 50)},${Math.round(pulse * 70)})`
+      ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, f.width, f.height)
       const speed = f.reducedMotion ? 0 : 0.25 + 1.2 * intensity
       const cx = f.width / 2
@@ -125,10 +125,17 @@ function starfieldInstance(): VisualizerInstance {
           s.z = 1
           continue
         }
-        const size = (1 - s.z) * 2.5 + 0.5 + pulse * 1.5
-        const c = Math.round(120 + 135 * (1 - s.z))
+        // The beat lives in the stars: nearer stars swell, whiten and get a halo.
+        const near = 1 - s.z
+        const size = (near * 2.5 + 0.5) * (1 + pulse * (0.5 + 1.5 * near))
+        const c = Math.round(120 + 135 * near + (135 - 135 * near) * pulse)
+        if (pulse > 0.05) {
+          const halo = size * 3
+          ctx.fillStyle = `rgba(${c},${c},255,${(0.25 * pulse * (0.3 + near)).toFixed(3)})`
+          ctx.fillRect(px - halo / 2, py - halo / 2, halo, halo)
+        }
         ctx.fillStyle = `rgb(${c},${c},255)`
-        ctx.fillRect(px, py, size, size)
+        ctx.fillRect(px - size / 2, py - size / 2, size, size)
       }
     },
   }

@@ -11,8 +11,19 @@ export const formatTime = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 export function PlayerBar() {
-  const { engine, status, current, toggle, mode, prev, next, entries, play, favorites } =
-    usePlayer()
+  const {
+    engine,
+    status,
+    current,
+    toggle,
+    mode,
+    prev,
+    next,
+    entries,
+    play,
+    favorites,
+    toggleFavorite,
+  } = usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
   const [dragSec, setDragSec] = useState<number | null>(null)
@@ -85,6 +96,16 @@ export function PlayerBar() {
           max={bank.total ?? undefined}
           value={bank.total === null ? undefined : bank.loaded}
         />
+      )}
+      {current && !current.id.startsWith('local:') && (
+        <button
+          className={styles.star}
+          aria-label={`${favorites.has(current.id) ? 'Unfavorite' : 'Favorite'} ${current.title}`}
+          aria-pressed={favorites.has(current.id)}
+          onClick={() => toggleFavorite(current.id)}
+        >
+          {favorites.has(current.id) ? '★' : '☆'}
+        </button>
       )}
       <span className={styles.barTitle}>
         {current ? current.title || current.file : 'Nothing playing'} ·{' '}
