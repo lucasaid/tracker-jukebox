@@ -155,3 +155,25 @@ describe('S3M parser', () => {
     expect(Math.abs(mean)).toBeLessThan(0.2)
   })
 })
+
+describe('MTM + 669 parsers', () => {
+  it('MASTER', () => {
+    const s = song('mtm/MASTER.MTM')
+    expect([s.title, s.channels, s.patterns.length, s.orders.length]).toEqual([
+      'Master Of Puppets',
+      4,
+      106,
+      97,
+    ])
+    expect(s.message).toContain('Forensic Medicine')
+  })
+  it('SIRIUS', () => {
+    const s = song('669/SIRIUS.669')
+    expect([s.samples.length, s.patterns.length, s.title]).toEqual([6, 10, 'Sirius of Canis Major'])
+  })
+  it('all 31 tracker files parse', () => {
+    const files = Object.entries(EXPECTED).filter(([, f]) => f !== 'midi')
+    expect(files).toHaveLength(31)
+    for (const [file, fmt] of files) expect(song(file).format).toBe(fmt)
+  })
+})
