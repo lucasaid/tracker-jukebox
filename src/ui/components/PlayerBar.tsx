@@ -10,7 +10,7 @@ export const formatTime = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 export function PlayerBar() {
-  const { engine, status, current, toggle, mode, prev, next } = usePlayer()
+  const { engine, status, current, toggle, mode, prev, next, entries, play } = usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
   const [dragSec, setDragSec] = useState<number | null>(null)
@@ -39,6 +39,11 @@ export function PlayerBar() {
     engine.seek({ seconds: dragSec })
     setSec(dragSec)
     setDragSec(null)
+  }
+  const playRandom = () => {
+    const pool = entries.filter((e) => e.id !== current?.id)
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    if (pick) void play(pick.id)
   }
   const total = current ? (current.loops ? '--:--' : formatTime(current.durationSec)) : '--:--'
   return (
@@ -85,6 +90,11 @@ export function PlayerBar() {
       {mode === 'jukebox' && (
         <button className={styles.btn} aria-label="Next song" onClick={() => void next()}>
           NEXT
+        </button>
+      )}
+      {entries.length > 1 && (
+        <button className={styles.btn} aria-label="Play a random song" onClick={playRandom}>
+          RANDOM
         </button>
       )}
       {current && (
