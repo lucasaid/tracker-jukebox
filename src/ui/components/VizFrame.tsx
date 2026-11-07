@@ -1,6 +1,6 @@
 // The visualizer well with a FULLSCREEN toggle. Fullscreen fills the window with the visualizer
 // (plus the browser's Fullscreen API where allowed); the player bar stays on top and, like the
-// toggle, fades out after IDLE_SEC without input and comes back on any mouse move or key.
+// toggle, fades out after IDLE_SEC without input and comes back on mouse move or click (keys leave it hidden).
 // On entering fullscreen and on every song change there, a now-playing card types in the title.
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -71,7 +71,6 @@ export function VizFrame(props: { children: ReactNode }) {
     // Esc: the browser leaves real fullscreen itself (fullscreenchange); this covers the CSS-only fallback
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setFull(false)
-      else wake()
     }
     const onFullscreen = (): void => {
       if (!document.fullscreenElement) setFull(false)
