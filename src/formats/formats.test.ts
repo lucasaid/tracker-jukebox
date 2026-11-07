@@ -126,3 +126,32 @@ describe('MOD + STM parsers', () => {
     expect(() => parse(load(file).subarray(0, 600))).toThrow(ParseError)
   })
 })
+
+describe('S3M parser', () => {
+  const s3mFiles = Object.entries(EXPECTED)
+    .filter(([, f]) => f === 's3m')
+    .map(([file]) => file)
+
+  it('PANIC', () => {
+    const s = song('s3m/PANIC.S3M')
+    expect([s.title, s.channels, s.samples.length, s.patterns.length]).toEqual(['', 16, 56, 62])
+  })
+  it('NIN-1', () => {
+    const s = song('s3m/NIN-1.S3M')
+    expect([s.title, s.channels, s.stereo]).toEqual(['NIN Melody Re-Mix I', 16, false])
+  })
+  it('NOTFKIDS', () => {
+    expect(song('s3m/NOTFKIDS.S3M').channels).toBe(4)
+  })
+  it.each(s3mFiles)('%s has no 254/255 orders', (file) => {
+    const s = song(file)
+    expect(s.orders.length).toBeGreaterThan(0)
+    expect(s.orders.some((o) => o >= 254)).toBe(false)
+  })
+  it.each(s3mFiles)('%s first non-empty sample is centred', (file) => {
+    const d = song(file).samples.find((x) => x.data.length > 0)?.data
+    expect(d).toBeDefined()
+    const mean = (d ?? new Float32Array(1)).reduce((a, b) => a + b, 0) / (d?.length ?? 1)
+    expect(Math.abs(mean)).toBeLessThan(0.2)
+  })
+})

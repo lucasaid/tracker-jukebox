@@ -1424,7 +1424,7 @@ Phase 0 was done as a user-requested exception, and it covers all of P1.
 - **Acceptance:** the tests show:
   1. The Expected values for PANIC, NIN-1 and NOTFKIDS.
   2. No order equals 254 or 255 in any S3M.
-  3. For every S3M, the first sample with length > 0 has |mean| < 0.1.
+  3. For every S3M, the first sample with length > 0 has |mean| < 0.2 (NOTFKIDS has a real DC offset of -0.14 and ICEFRONT 0.10; a signedness error would give a mean near ±1).
 - `feat(formats): S3M parser`
 
 **P6 · MTM + 669 parsers**
