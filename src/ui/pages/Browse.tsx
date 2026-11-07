@@ -7,6 +7,8 @@ import type { Filters, SortKey } from '../../library/search'
 import type { ManifestEntry } from '../../library/manifest'
 import { formatRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
+import { useSettings } from '../../state/SettingsContext'
+import type { Settings } from '../../state/settings'
 import { DropZone } from '../components/DropZone'
 import { formatTime } from '../components/PlayerBar'
 import styles from '../ui.module.css'
@@ -28,11 +30,17 @@ const isLocal = (e: ManifestEntry): boolean => e.id.startsWith('local:')
 export function Browse() {
   const { entries, manifestError, retryManifest, current, play, favorites, toggleFavorite } =
     usePlayer()
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
-    key: 'title',
-    dir: 'asc',
-  })
+  const { settings, update } = useSettings()
+  const [query, setQuery] = useState(EMPTY_FILTERS.query)
+  const { sortKey, sortDir, ...chips } = settings.browse
+  const filters: Filters = { ...chips, query }
+  const sort = { key: sortKey, dir: sortDir }
+  const setBrowse = (patch: Partial<Settings['browse']>): void =>
+    update((s) => ({ ...s, browse: { ...s.browse, ...patch } }))
+  const setFilters = ({ query: q, ...rest }: Filters): void => {
+    setQuery(q)
+    setBrowse(rest)
+  }
 
   const rows = sortEntries(filterEntries(entries, filters, favorites), sort.key, sort.dir)
   const bundled = rows.filter((e) => !isLocal(e))
@@ -40,7 +48,14 @@ export function Browse() {
   const channelCounts = [...new Set(entries.map((e) => e.channels))].sort((a, b) => a - b)
 
   const sortBy = (key: SortKey): void =>
-    setSort((s) => ({ key, dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc' }))
+    update((s) => ({
+      ...s,
+      browse: {
+        ...s.browse,
+        sortKey: key,
+        sortDir: s.browse.sortKey === key && s.browse.sortDir === 'asc' ? 'desc' : 'asc',
+      },
+    }))
 
   const row = (e: ManifestEntry) => (
     <tr key={e.id} className={e.id === current?.id ? styles.playing : undefined}>

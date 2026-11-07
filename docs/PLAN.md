@@ -958,12 +958,21 @@ export interface Settings {
     autoViz: 'off' | 'perSong' | 'every2min'
   }
   intro: { skip: boolean }
+  browse: {
+    // Browse page sort and chips; the search text is not kept. Empty lists = all.
+    sortKey: SortKey
+    sortDir: 'asc' | 'desc'
+    formats: Format[]
+    channels: number[] // positive integers
+    favoritesOnly: boolean
+  }
 }
 export const DEFAULTS: Settings
 // { version: 1, theme: 'bbs',
 //   player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern' },
 //   jukebox: { shuffle: true, formats: [], favoritesOnly: false, fade: true, maxLengthMin: 5, autoViz: 'perSong' },
-//   intro: { skip: false } }
+//   intro: { skip: false },
+//   browse: { sortKey: 'title', sortDir: 'asc', formats: [], channels: [], favoritesOnly: false } }
 export const SETTINGS_KEY = 'tj.settings.v1'
 export const FAVORITES_KEY = 'tj.favorites.v1'
 /** Never throws. storage defaults to globalThis.localStorage (access in try/catch). Missing, blocked or invalid JSON → DEFAULTS.

@@ -87,6 +87,23 @@ describe('settings', () => {
     })
     expect(s.intro.skip).toBe(true)
   })
+  it('keeps valid browse leaves and drops bad ones', () => {
+    const raw = {
+      browse: {
+        sortKey: 'addedAt',
+        sortDir: 'up',
+        formats: ['s3m', 'xm'],
+        channels: [4, 0, '8', 8],
+      },
+    }
+    const s = loadSettings(memory({ [SETTINGS_KEY]: JSON.stringify(raw) }))
+    expect(s.browse).toEqual({
+      ...DEFAULTS.browse,
+      sortKey: 'addedAt',
+      formats: ['s3m'],
+      channels: [4, 8],
+    })
+  })
   it('saves, reloads, and reports blocked storage', () => {
     const st = memory()
     const s = { ...DEFAULTS, theme: 'mix' as const }

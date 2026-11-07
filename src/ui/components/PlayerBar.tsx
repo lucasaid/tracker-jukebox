@@ -1,6 +1,6 @@
 // Bottom transport bar (decision 34).
 import { useEffect, useState } from 'react'
-import { sortEntries } from '../../library/search'
+import { EMPTY_FILTERS, filterEntries, sortEntries } from '../../library/search'
 import { formatRoute, parseRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
@@ -11,7 +11,8 @@ export const formatTime = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 export function PlayerBar() {
-  const { engine, status, current, toggle, mode, prev, next, entries, play } = usePlayer()
+  const { engine, status, current, toggle, mode, prev, next, entries, play, favorites } =
+    usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
   const [dragSec, setDragSec] = useState<number | null>(null)
@@ -52,12 +53,13 @@ export function PlayerBar() {
     const pick = pool[Math.floor(Math.random() * pool.length)]
     if (pick) playAndFollow(pick.id)
   }
-  /** Jukebox: the queue. Otherwise the whole library by title (same order as the jukebox), wrapping.
-   *  ponytail: ignores the Browse page's sort/filter, which is local to that page; follow it once
-   *  sort/filter move into settings or the URL (TODO). */
+  /** Jukebox: the queue. Otherwise the Browse order (saved sort and chips, not the search text),
+   *  or the whole library if the chips match nothing; wraps at both ends. */
   const step = (dir: 1 | -1) => {
     if (mode === 'jukebox') return void (dir === 1 ? next() : prev())
-    const ids = sortEntries(entries, 'title', 'asc').map((e) => e.id)
+    const { sortKey, sortDir, ...chips } = settings.browse
+    const shown = filterEntries(entries, { ...EMPTY_FILTERS, ...chips }, favorites)
+    const ids = sortEntries(shown.length > 0 ? shown : entries, sortKey, sortDir).map((e) => e.id)
     const i = current ? ids.indexOf(current.id) : -1
     const id = ids[(i + dir + ids.length) % ids.length]
     if (id) playAndFollow(id)
