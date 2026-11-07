@@ -65,6 +65,9 @@ function Shell() {
       const digit = /^Digit(\d)$/.exec(e.code)
       const n = digit ? Number(digit[1]) : -1
       const consume = (): void => e.preventDefault()
+      // fullscreen visualizer (VizFrame): page-navigation keys would change the page behind it
+      const noNav = document.documentElement.dataset.vizFull !== undefined
+      if (noNav && /^[bjcm]$/i.test(e.key)) return
       if (e.code === 'Space') {
         if (t instanceof Element && t.closest('button, a')) return // the focused control handles Space
         consume()

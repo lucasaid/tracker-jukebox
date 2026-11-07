@@ -75,6 +75,7 @@ export function VizFrame(props: { children: ReactNode }) {
     const onFullscreen = (): void => {
       if (!document.fullscreenElement) setFull(false)
     }
+    root.dataset.vizFull = '' // App skips its page-navigation shortcuts while this is set
     wake()
     window.addEventListener('pointermove', wake)
     window.addEventListener('pointerdown', wake)
@@ -87,6 +88,7 @@ export function VizFrame(props: { children: ReactNode }) {
       document.removeEventListener('fullscreenchange', onFullscreen)
       clearTimeout(timer)
       delete root.dataset.idle
+      delete root.dataset.vizFull
       if (document.fullscreenElement) void document.exitFullscreen()
     }
   }, [full])
