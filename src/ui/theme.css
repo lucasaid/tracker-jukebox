@@ -127,7 +127,7 @@
   --pat-note: #fff;
   --pat-inst: #55ffff;
   --pat-vol: #55ff55;
-  --pat-fx: #ff55ff;
+  --pat-fx: #ffff55; /* VGA yellow; no pink in the bbs visualizers */
   --pat-empty: #555;
   --pat-sep: #555;
   --pat-beat: #000055;
