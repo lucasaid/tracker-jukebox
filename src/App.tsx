@@ -1,16 +1,16 @@
 // Dev player (P13): a plain control panel for the AudioEngine. Replaced by the themed app from P17.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AudioEngine } from './audio/AudioEngine'
 import type { EngineStatus } from './audio/AudioEngine'
 import type { Interpolation } from './engine'
 import { loadManifest } from './library/manifest'
 import type { ManifestEntry } from './library/manifest'
+import { VisualizerHost, visualizers } from './viz'
 
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1'
 
 export function App() {
-  const engine = useRef<AudioEngine | null>(null)
-  engine.current ??= new AudioEngine({ debug: DEBUG })
+  const [engine] = useState(() => new AudioEngine({ debug: DEBUG }))
   const [entries, setEntries] = useState<ManifestEntry[]>([])
   const [selected, setSelected] = useState('')
   const [status, setStatus] = useState<EngineStatus>('locked')
@@ -20,10 +20,10 @@ export function App() {
   const [stereo, setStereo] = useState(1)
   const [muteMask, setMuteMask] = useState(0)
   const [channels, setChannels] = useState(0)
+  const [vizId, setVizId] = useState('scope')
 
   useEffect(() => {
-    const e = engine.current
-    if (!e) return
+    const e = engine
     loadManifest().then(setEntries, (err: unknown) =>
       setMessage(err instanceof Error ? err.message : 'Manifest failed'),
     )
@@ -45,11 +45,10 @@ export function App() {
       clearInterval(timer)
       off()
     }
-  }, [])
+  }, [engine])
 
   const run = async (fn: (e: AudioEngine) => Promise<void> | void) => {
-    const e = engine.current
-    if (!e) return
+    const e = engine
     try {
       await e.unlock()
       await fn(e)
@@ -73,14 +72,14 @@ export function App() {
   }
 
   const step = (d: number) => {
-    const p = engine.current?.latest()?.snap.pos
-    if (p?.kind === 'tracker') engine.current?.seek({ order: Math.max(0, p.order + d) })
+    const p = engine.latest()?.snap.pos
+    if (p?.kind === 'tracker') engine.seek({ order: Math.max(0, p.order + d) })
   }
 
   const toggleMute = (c: number) => {
     const next = muteMask ^ (1 << c)
     setMuteMask(next)
-    engine.current?.setOptions({ muteMask: next })
+    engine.setOptions({ muteMask: next })
   }
 
   return (
@@ -100,15 +99,26 @@ export function App() {
           ))}
       </select>
       <p>
-        <button
-          onClick={() => (status === 'playing' ? engine.current?.pause() : engine.current?.play())}
-        >
+        <button onClick={() => (status === 'playing' ? engine.pause() : engine.play())}>
           {status === 'playing' ? 'Pause' : 'Play'}
         </button>
         <button onClick={() => step(-1)}>Order −</button>
         <button onClick={() => step(1)}>Order +</button>
       </p>
       <p>{where}</p>
+      <label>
+        Visualizer{' '}
+        <select value={vizId} onChange={(e) => setVizId(e.target.value)}>
+          {visualizers.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div style={{ height: 240 }}>
+        <VisualizerHost vizId={vizId} engine={engine} label="Visualizer" />
+      </div>
       <label>
         Interpolation{' '}
         <select
@@ -117,7 +127,7 @@ export function App() {
             const v = e.target.value
             if (v === 'nearest' || v === 'linear' || v === 'cubic') {
               setInterpolation(v)
-              engine.current?.setOptions({ interpolation: v })
+              engine.setOptions({ interpolation: v })
             }
           }}
         >
@@ -137,7 +147,7 @@ export function App() {
           onChange={(e) => {
             const v = Number(e.target.value)
             setStereo(v)
-            engine.current?.setOptions({ stereoSeparation: v })
+            engine.setOptions({ stereoSeparation: v })
           }}
         />
       </label>
