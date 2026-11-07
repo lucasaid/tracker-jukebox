@@ -185,7 +185,7 @@ export function Browse() {
           </>
         )}
       </section>
-      {selected && <InfoPanel entry={selected} />}
+      {selected && <InfoPanel key={selected.id} entry={selected} />}
     </>
   )
 }

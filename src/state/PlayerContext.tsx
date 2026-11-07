@@ -123,15 +123,27 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const local = localsRef.current.find((l) => l.entry.id === id)
     const entry = local?.entry ?? manifestEntries.find((e) => e.id === id)
     if (!entry) throw new Error('Song not found')
-    await engine.unlock()
+    try {
+      await engine.unlock()
+    } catch (err) {
+      // Callers fire play() from click handlers without awaiting, so report it here.
+      const message = err instanceof Error ? err.message : 'Audio is not available'
+      console.error(message, err)
+      toast(message)
+      return false
+    }
     // Mutes belong to one song, so a new song starts unmuted.
     setMuteMask(0)
     engine.setOptions({ muteMask: 0 })
+    const target = opts?.midiTarget ?? entry.midiTarget ?? undefined
     try {
-      await engine.load(local ? { id, parsed: local.parsed } : { id, url: entry.url ?? '' }, {
+      // A dropped MIDI is never re-parsed, so the MT-32 toggle sets its target directly.
+      const parsed =
+        local?.parsed.kind === 'midi' && target ? { ...local.parsed, target } : local?.parsed
+      await engine.load(parsed ? { id, parsed } : { id, url: entry.url ?? '' }, {
         seek: opts?.seek,
         fadeSec: opts?.fadeSec,
-        midiTarget: opts?.midiTarget ?? entry.midiTarget ?? undefined,
+        midiTarget: target,
       })
       return true
     } catch {

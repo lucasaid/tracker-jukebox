@@ -257,6 +257,9 @@ export class AudioEngine {
     const before: EngineStatus =
       this.state === 'loading' ? (this.current ? 'paused' : 'idle') : this.state
     this.setStatus('loading')
+    // Only this load's handle is cleared on the way out: an aborted load settles after the newer
+    // one has already installed its own on the same deck.
+    let mine: Deck['waiting'] = null
     try {
       let song: ParsedFile
       if ('parsed' in src) song = src.parsed
@@ -281,12 +284,13 @@ export class AudioEngine {
       target.snapshots = []
       target.lastPick = null
       const ready = new Promise<void>((ok, fail) => {
-        target.waiting = { id: src.id, ok, fail }
+        mine = { id: src.id, ok, fail }
+        target.waiting = mine
         abort.signal.addEventListener('abort', () => fail(abortError()))
       })
       this.send(target, { type: 'load', id: src.id, song, options: this.options, seek: opts?.seek })
       await ready
-      target.waiting = null
+      if (target.waiting === mine) target.waiting = null
       if (stale()) throw abortError()
       target.loaded = { id: src.id, song, durationSec }
 
@@ -309,7 +313,7 @@ export class AudioEngine {
       if (opts?.autoplay !== false) this.play()
       return target.loaded
     } catch (err) {
-      for (const d of this.decks) d.waiting = null
+      for (const d of this.decks) if (d.waiting === mine) d.waiting = null
       if (stale()) throw err instanceof DOMException ? err : abortError()
       this.setStatus(before)
       this.emit({

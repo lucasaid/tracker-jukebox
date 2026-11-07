@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { AudioEngine } from './audio/AudioEngine'
 import { ConnectOverlay } from './ui/components/ConnectOverlay'
 import { ErrorBoundary } from './ui/components/ErrorBoundary'
 import { PlayerBar } from './ui/components/PlayerBar'
@@ -146,7 +147,17 @@ function Shell() {
   )
 }
 
+const SUPPORTED = AudioEngine.isSupported()
+
 export function App() {
+  // ponytail: an unlock() that throws on a supported browser is a toast, not this screen; route it
+  // here too if that turns out to happen in practice.
+  if (!SUPPORTED)
+    return (
+      <div className={styles.halted} role="alert">
+        <p>UNSUPPORTED BROWSER — this player needs Web Audio with AudioWorklet</p>
+      </div>
+    )
   return (
     <SettingsProvider>
       <PlayerProvider>

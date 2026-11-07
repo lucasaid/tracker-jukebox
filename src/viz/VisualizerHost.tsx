@@ -113,9 +113,11 @@ export function VisualizerHost(props: {
       try {
         instance.draw(ctx, f, dt)
       } catch (err) {
+        // Stop now so it logs once; the re-render with the scope starts a fresh loop.
+        cancelAnimationFrame(raf)
         console.warn(`Visualizer "${id}" failed, switching to scope`, err)
-        if (id === 'scope') cancelAnimationFrame(raf)
-        else setFailedId(vizId)
+        if (id !== 'scope') setFailedId(vizId)
+        return
       }
       if (latest && now - lastAria > 500) {
         lastAria = now

@@ -1,5 +1,5 @@
 // Window-wide drag & drop target (decision 37). Nothing is uploaded: files are read locally.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePlayer } from '../../state/PlayerContext'
 import styles from '../ui.module.css'
 import { showToast } from './Toast'
@@ -7,8 +7,14 @@ import { showToast } from './Toast'
 const hasFiles = (e: DragEvent): boolean => e.dataTransfer?.types.includes('Files') ?? false
 
 export function DropZone() {
-  const { addLocal, play } = usePlayer()
+  const player = usePlayer()
   const [over, setOver] = useState(false)
+  // The listeners live for the whole mount (re-adding them each render would reset `depth`
+  // mid-drag and flicker the overlay), so they reach the latest player through a ref.
+  const api = useRef(player)
+  useEffect(() => {
+    api.current = player
+  })
 
   useEffect(() => {
     let depth = 0
@@ -35,13 +41,13 @@ export function DropZone() {
         let first: string | null = null
         for (const file of files) {
           try {
-            const entry = await addLocal(file)
+            const entry = await api.current.addLocal(file)
             first ??= entry.id
           } catch (err) {
             showToast(`${file.name}: ${err instanceof Error ? err.message : 'Failed'}`)
           }
         }
-        if (first !== null) await play(first)
+        if (first !== null) await api.current.play(first)
       })()
     }
     window.addEventListener('dragenter', onEnter)
@@ -54,7 +60,7 @@ export function DropZone() {
       window.removeEventListener('dragleave', onLeave)
       window.removeEventListener('drop', onDrop)
     }
-  }, [addLocal, play])
+  }, [])
 
   return over ? (
     <div className={styles.drop} role="status">
