@@ -1,0 +1,8 @@
+# public/music and public/manifest.json are generated (gitignored), and the SoundFont is fetched,
+# so the manifest and fetch steps must run before the build.
+[build]
+  command = "pnpm install --frozen-lockfile && pnpm manifest && pnpm fetch-soundfont && pnpm build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
