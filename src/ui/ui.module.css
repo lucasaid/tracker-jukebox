@@ -209,6 +209,11 @@
   border-top: var(--bar-border);
   box-shadow: var(--bar-shadow);
 }
+.seek {
+  flex: 2;
+  min-width: 80px;
+  accent-color: var(--accent);
+}
 .barTitle {
   flex: 1;
   min-width: 0;

@@ -13,6 +13,7 @@ export function PlayerBar() {
   const { engine, status, current, toggle, mode, prev, next } = usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
+  const [dragSec, setDragSec] = useState<number | null>(null)
   const [bank, setBank] = useState<{ loaded: number; total: number | null } | null>(null)
 
   useEffect(
@@ -33,6 +34,12 @@ export function PlayerBar() {
   }, [engine])
 
   const nextTheme = THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length] ?? settings.theme
+  const commitSeek = () => {
+    if (dragSec === null) return
+    engine.seek({ seconds: dragSec })
+    setSec(dragSec)
+    setDragSec(null)
+  }
   const total = current ? (current.loops ? '--:--' : formatTime(current.durationSec)) : '--:--'
   return (
     <div className={styles.bar}>
@@ -57,8 +64,24 @@ export function PlayerBar() {
       )}
       <span className={styles.barTitle}>
         {current ? current.title || current.file : 'Nothing playing'} ·{' '}
-        {current ? formatTime(sec) : '0:00'} / {total}
+        {current ? formatTime(dragSec ?? sec) : '0:00'} / {total}
       </span>
+      {current && !current.loops && current.durationSec > 0 && (
+        // seek commits on release: tracker seeks fast-forward from the start, too slow per input event
+        <input
+          type="range"
+          className={styles.seek}
+          aria-label="Seek"
+          min={0}
+          max={current.durationSec}
+          step={1}
+          value={Math.min(dragSec ?? sec, current.durationSec)}
+          onChange={(e) => setDragSec(Number(e.target.value))}
+          onPointerUp={commitSeek}
+          onKeyUp={commitSeek}
+          onBlur={commitSeek}
+        />
+      )}
       {mode === 'jukebox' && (
         <button className={styles.btn} aria-label="Next song" onClick={() => void next()}>
           NEXT
