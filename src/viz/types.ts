@@ -1,6 +1,25 @@
 import type { ParsedFile } from '../formats'
 import type { Snapshot } from '../engine'
 
+/** CSS colour strings read by VisualizerHost from the theme's --pat-* / --scope-* / --fg / --dim / --accent tokens. */
+export interface Palette {
+  fg: string
+  dim: string
+  accent: string
+  rownum: string
+  note: string
+  inst: string
+  vol: string
+  fx: string
+  empty: string
+  sep: string
+  beat: string
+  cur: string
+  bg: string // --scope-bg
+  grid: string // --scope-grid
+  wave: string // --scope-wave
+}
+
 export interface Frame {
   snap: Snapshot
   song: ParsedFile
@@ -13,6 +32,7 @@ export interface Frame {
   height: number
   dpr: number
   reducedMotion: boolean
+  palette: Palette
 }
 
 export interface VisualizerInstance {

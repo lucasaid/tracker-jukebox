@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tracker Jukebox — Mix mockup</title>
+    <style>
+      @font-face {
+        font-family: 'Web437 IBM VGA 8x16';
+        src: url('../public/fonts/Web437_IBM_VGA_8x16.woff') format('woff');
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        padding: 0 16px 72px;
+        font:
+          16px/1.25 'Web437 IBM VGA 8x16',
+          monospace;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      h1,
+      h2 {
+        font-size: 16px;
+        font-weight: normal;
+        margin: 0;
+      }
+      pre {
+        font: inherit;
+        margin: 0;
+        white-space: pre;
+      }
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      .panel {
+        margin: 16px 0;
+        padding: 12px;
+        min-width: 0;
+      }
+      .panel > * + * {
+        margin-top: 12px;
+      }
+      .note {
+        color: var(--dim);
+      }
+      .logo {
+        line-height: 1;
+        overflow: hidden;
+      }
+      .menu {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 24px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .chip {
+        padding: 2px 8px;
+      }
+      .search {
+        width: 100%;
+        padding: 6px 8px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        padding: 4px 6px;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .c-star {
+        width: 3ch;
+      }
+      .c-fmt {
+        width: 6ch;
+      }
+      .c-ch {
+        width: 5ch;
+      }
+      .c-len {
+        width: 9ch;
+      }
+      .c-size {
+        width: 7ch;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+      }
+      .file {
+        color: var(--dim);
+      }
+      .np-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 4px 16px;
+      }
+      .np-body {
+        display: grid;
+        gap: 12px;
+      }
+      .pattern {
+        font-size: min(16px, 3.5vw);
+        line-height: 1.15;
+        overflow: hidden;
+      }
+      .pattern .r {
+        color: var(--rownum);
+      }
+      .pattern .n {
+        color: var(--note);
+      }
+      .pattern .i {
+        color: var(--inst);
+      }
+      .pattern .x {
+        color: var(--fx);
+      }
+      .pattern .e {
+        color: var(--empty);
+      }
+      .pattern .beat {
+        background: var(--beat);
+      }
+      .pattern .cur {
+        background: var(--cur);
+      }
+      .pattern .cur .r {
+        color: var(--fg);
+      }
+      .side {
+        display: grid;
+        gap: 12px;
+        align-content: start;
+        min-width: 0;
+      }
+      canvas.scope {
+        display: block;
+        width: 100%;
+        height: 120px;
+      }
+      .msg {
+        white-space: pre-wrap;
+      }
+      .bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 16px;
+      }
+      .bar .t {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .c-len,
+      .c-size {
+        display: none;
+      }
+      @media (min-width: 600px) {
+        .c-len,
+        .c-size {
+          display: table-cell;
+        }
+        .np-body {
+          grid-template-columns: max-content 1fr;
+        }
+        .pattern {
+          font-size: 16px;
+        }
+      }
+
+      :root {
+        --bg: #000;
+        --fg: #aaa;
+        --dim: #555;
+        --accent: #55ffff;
+        --hi: #ffff55;
+        --panel: #3a4566;
+        --light: #7783aa;
+        --dark: #151a2e;
+        --rownum: #7783aa;
+        --note: #fff;
+        --inst: #ffff55;
+        --fx: #ff55ff;
+        --empty: #333a52;
+        --beat: #0a0d1a;
+        --cur: #3a4566;
+        --scope-bg: #000;
+        --grid: #1a2238;
+        --wave: #55ffff;
+      }
+      a {
+        color: var(--hi);
+      }
+      .top {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 16px;
+        padding: 10px 0;
+      }
+      .top::after {
+        content: '';
+        position: absolute;
+        left: -16px;
+        right: -16px;
+        bottom: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #ff5555, #ffff55, #55ff55, #55ffff, #5555ff, #ff55ff);
+      }
+      .top h1 {
+        color: var(--hi);
+      }
+      .panel {
+        border: 4px double var(--dim);
+      }
+      .ph {
+        color: var(--accent);
+      }
+      .ph::before {
+        content: '═╡ ';
+        color: var(--dim);
+      }
+      .ph::after {
+        content: ' ╞═';
+        color: var(--dim);
+      }
+      .logo {
+        color: var(--accent);
+        text-shadow: 0 0 6px rgba(85, 255, 255, 0.5);
+      }
+      .tag {
+        margin-bottom: 0;
+      }
+      .btn {
+        background: none;
+        border: 0;
+        color: var(--hi);
+        padding: 2px 0;
+      }
+      .btn::before {
+        content: '[ ';
+        color: var(--fg);
+      }
+      .btn::after {
+        content: ' ]';
+        color: var(--fg);
+      }
+      .btn:hover {
+        background: var(--fg);
+        color: #000;
+      }
+      .term {
+        color: #55ff55;
+      }
+      .cursor {
+        animation: blink 1s steps(1) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .search {
+        background: #000;
+        border: 1px solid var(--dim);
+        color: #fff;
+      }
+      .chip {
+        background: none;
+        border: 1px solid var(--dim);
+        color: var(--fg);
+      }
+      .chip.on {
+        background: var(--hi);
+        border-color: var(--hi);
+        color: #000;
+      }
+      .sep {
+        width: 8px;
+      }
+      th {
+        color: var(--accent);
+        border-bottom: 1px solid var(--dim);
+      }
+      tr.sel td {
+        background: #0000aa;
+        color: #fff;
+      }
+      td.c-star {
+        color: var(--hi);
+      }
+      .np-title {
+        color: var(--hi);
+      }
+      .pattern,
+      .scope {
+        background: #000;
+        border: 2px solid;
+        border-color: var(--dark) var(--light) var(--light) var(--dark);
+      }
+      .pattern {
+        padding: 4px;
+      }
+      .pattern .s {
+        color: var(--panel);
+      }
+      .msg {
+        color: var(--fx);
+      }
+      .bar {
+        background: var(--panel);
+        color: #fff;
+        border-top: 2px solid var(--light);
+      }
+      .bar .btn::before,
+      .bar .btn::after {
+        color: var(--light);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <h1>TRACKER JUKEBOX</h1>
+        <span class="note">BBS shell + tracker pattern panels + demoscene accents</span>
+      </header>
+
+      <section class="panel" id="landing">
+        <h2 class="ph">01 · LANDING</h2>
+        <pre class="logo" id="logo" aria-label="Tracker Jukebox"></pre>
+        <p class="tag">BBS music from the 90s · MOD S3M STM 669 MTM MIDI</p>
+
+        <button class="btn" type="button">DIAL</button>
+        <pre class="term">ATDT 555-1993
+CONNECT 14400<span class="cursor">_</span></pre>
+        <nav class="menu">
+          <a href="#browse">[B]rowse</a><a href="#browse">[J]ukebox</a
+          ><a href="#landing">[C]redits</a>
+        </nav>
+        <label class="chk"><input type="checkbox" /> skip intro next time</label>
+      </section>
+
+      <section class="panel" id="browse">
+        <h2 class="ph">02 · BROWSE</h2>
+        <input
+          class="search"
+          type="search"
+          placeholder="search title, file, message…"
+          aria-label="Search"
+        />
+        <div class="chips" aria-label="Format">
+          <button class="chip on" type="button">ALL</button
+          ><button class="chip" type="button">MOD</button
+          ><button class="chip" type="button">S3M</button
+          ><button class="chip" type="button">STM</button
+          ><button class="chip" type="button">669</button
+          ><button class="chip" type="button">MTM</button
+          ><button class="chip" type="button">MIDI</button>
+          <span class="sep"></span>
+          <button class="chip" type="button">4ch</button
+          ><button class="chip" type="button">8ch</button
+          ><button class="chip" type="button">16ch</button>
+        </div>
+        <table class="list">
+          <thead>
+            <tr>
+              <th class="c-star" aria-label="Favorite">★</th>
+              <th>Title ▲</th>
+              <th class="c-fmt">Fmt</th>
+              <th class="c-ch num">Ch</th>
+              <th class="c-len num">Length</th>
+              <th class="c-size num">Size</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="now">
+        <h2 class="ph">03 · NOW PLAYING</h2>
+        <div class="np-head">
+          <span class="np-title">Beverly Hills 90210</span
+          ><span class="note">90210.MOD · MOD · 4ch · order 02/13 · pattern 02</span>
+        </div>
+        <div class="np-body">
+          <pre class="pattern" id="pattern"></pre>
+          <div class="side">
+            <canvas class="scope" id="scope" aria-label="Oscilloscope"></canvas>
+            <pre class="msg">
+BASS.SAM  BASSDRM.SAM  SNARE.SAM  HIHAT.SAM
+ Downloaded From..
+ Music Channel BBS
+   (203)646-3058</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="bar">
+      <button class="btn" type="button" aria-label="Play">▶</button
+      ><span class="t">Beverly Hills 90210 · 0:42 / --:--</span
+      ><button class="btn" type="button">VIEW</button>
+    </div>
+
+    <script>
+      const ROWS = [
+        ['Beverly Hills 90210', '90210.MOD', 'MOD', 4, '77K'],
+        ['Cantina band', 'CANTINA.669', 'MOD', 8, '449K'],
+        ['the call of ktulu', 'KTULHU.STM', 'STM', 4, '216K'],
+        ['', 'PANIC.S3M', 'S3M', 16, '579K'],
+        ['NIN Melody Re-Mix I', 'NIN-1.S3M', 'S3M', 16, '467K'],
+        ['Master Of Puppets', 'MASTER.MTM', 'MTM', 4, '264K'],
+        ['Sirius of Canis Major', 'SIRIUS.669', '669', 8, '84K'],
+        ['12th warrior', '12WARIOR.MOD', 'MOD', 4, '140K'],
+      ]
+      const PAT = [
+        ['C-2 04 ...', 'C-3 02 ...', 'D-3 05 ...', 'C-2 06 ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', 'C-3 03 ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', '... .. ...', 'G-2 05 ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', 'C-3 02 ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', 'C-3 03 ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['C-2 04 ...', '... .. ...', '... .. ...', '... .. ...'],
+        ['... .. ...', '... .. ...', '... .. ...', '... .. ...'],
+      ]
+      const CUR_ROW = 4
+      // 3x5 block font for the logo
+      const G = {
+        T: '###.#..#..#..#.',
+        R: '##.#.###.#.##.#',
+        A: '.#.#.#####.##.#',
+        C: '.###..#..#...##',
+        K: '#.##.###.#.##.#',
+        E: '####..##.#..###',
+        J: '..#..#..##.#.#.',
+        U: '#.##.##.##.####',
+        B: '##.#.###.#.###.',
+        O: '.#.#.##.##.#.#.',
+        X: '#.##.#.#.#.##.#',
+      }
+      function logoLines(word) {
+        const lines = ['', '', '', '', '']
+        for (const ch of word)
+          for (let y = 0; y < 5; y++)
+            lines[y] +=
+              ch === ' '
+                ? '  '
+                : G[ch]
+                    .slice(y * 3, y * 3 + 3)
+                    .replace(/#/g, '█')
+                    .replace(/\./g, ' ') + ' '
+        return lines
+      }
+      const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      document.getElementById('rows').innerHTML = ROWS.map(
+        ([title, file, fmt, ch, size], i) =>
+          '<tr' +
+          (i === 0 ? ' class="sel"' : '') +
+          '><td class="c-star">' +
+          (i % 3 === 1 ? '★' : '☆') +
+          '</td><td>' +
+          (title
+            ? esc(title) + ' <span class="file">' + file + '</span>'
+            : '<span class="file">' + file + '</span>') +
+          '</td><td class="c-fmt">' +
+          fmt +
+          '</td><td class="c-ch num">' +
+          ch +
+          '</td><td class="c-len num">--:--</td><td class="c-size num">' +
+          size +
+          '</td></tr>',
+      ).join('')
+      const cell = (c) => {
+        const [n, i, x] = c.split(' ')
+        const k = (s, cls) => '<span class="' + (s[0] === '.' ? 'e' : cls) + '">' + s + '</span>'
+        return k(n, 'n') + ' ' + k(i, 'i') + ' ' + k(x, 'x')
+      }
+      document.getElementById('pattern').innerHTML = PAT.map(
+        (row, r) =>
+          '<span class="' +
+          (r === CUR_ROW ? 'cur' : r % 4 === 0 ? 'beat' : '') +
+          '"><span class="r">' +
+          r.toString(16).toUpperCase().padStart(2, '0') +
+          '</span>' +
+          row.map((c) => '<span class="s">│</span>' + cell(c)).join('') +
+          '</span>',
+      ).join('\n')
+      const scope = document.getElementById('scope')
+      function drawScope(phase) {
+        const dpr = window.devicePixelRatio || 1,
+          w = scope.clientWidth,
+          h = scope.clientHeight
+        if (scope.width !== Math.round(w * dpr)) {
+          scope.width = Math.round(w * dpr)
+          scope.height = Math.round(h * dpr)
+        }
+        const g = scope.getContext('2d'),
+          cs = getComputedStyle(document.body)
+        g.setTransform(dpr, 0, 0, dpr, 0, 0)
+        g.fillStyle = cs.getPropertyValue('--scope-bg')
+        g.fillRect(0, 0, w, h)
+        g.strokeStyle = cs.getPropertyValue('--grid')
+        g.lineWidth = 1
+        g.beginPath()
+        g.moveTo(0, h / 2 + 0.5)
+        g.lineTo(w, h / 2 + 0.5)
+        g.stroke()
+        g.strokeStyle = cs.getPropertyValue('--wave')
+        g.lineWidth = 2
+        g.beginPath()
+        for (let x = 0; x <= w; x++) {
+          const t = (x / w) * Math.PI * 2 + phase
+          const v =
+            Math.sin(t * 3) * 0.55 +
+            Math.sin(t * 7.02) * 0.2 * Math.cos(t) +
+            Math.sin(t * 23) * 0.06
+          const y = h / 2 - v * h * 0.42
+          x ? g.lineTo(x, y) : g.moveTo(x, y)
+        }
+        g.stroke()
+      }
+      drawScope(0)
+      addEventListener('resize', () => drawScope(0))
+      document.getElementById('logo').textContent = [
+        ...logoLines('TRACKER'),
+        '',
+        ...logoLines('JUKEBOX'),
+      ].join('\n')
+    </script>
+  </body>
+</html>

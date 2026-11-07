@@ -84,6 +84,7 @@ pnpm fetch-soundfont             # from P24
 - Nothing is allocated in `Player.render` or the worklet's `process()`.
 - Put units in names (`durationSec`, `frames`, `Hz`, `Db`).
 - React: function components, CSS Modules, theme tokens on `:root`.
+- Themes: `bbs` (default), `tracker`, `demoscene`, `mix`, set as `<html data-theme>` from `settings.theme`. `src/ui/theme.css` holds one token set per theme. Components, CSS Modules and visualizers use only tokens (canvas: `Frame.palette`) and never test the theme name. A new look is a token change, not a component change.
 - Throw only the error types listed in Contracts. No empty `catch`. No `console.log`.
 - Deliberate shortcuts get a comment: `// ponytail: <limit>, <upgrade path>`.
 - Lint suppression only as `eslint-disable-next-line <rule> -- <reason>`. Never weaken `tsconfig`.

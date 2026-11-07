@@ -1,0 +1,429 @@
+/*
+ * Themes: bbs (default), tracker, demoscene, mix — from mockups/*.html.
+ * App.tsx sets <html data-theme="…"> from settings.theme. Components and CSS Modules use
+ * only these tokens and never test the theme name, so adding a theme is one block here.
+ * VisualizerHost reads the --pat-* / --scope-* tokens into Frame.palette for canvas drawing.
+ */
+
+@font-face {
+  font-family: 'Web437 IBM VGA 8x16';
+  src: url('/fonts/Web437_IBM_VGA_8x16.woff') format('woff');
+  font-display: swap;
+}
+
+/* Shared, theme-independent tokens */
+:root {
+  --font: 'Web437 IBM VGA 8x16', monospace;
+  --font-size: 16px; /* the font's native size; keep integer multiples for crisp glyphs */
+  --line: 1.25;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --gutter: 16px;
+  --bar-height: 48px;
+}
+
+/* ── bbs: ANSI board, 16-colour VGA palette, double-line frames ── */
+:root,
+:root[data-theme='bbs'] {
+  --bg: #000;
+  --bg-image: none;
+  --fg: #aaa;
+  --dim: #555;
+  --accent: #55ffff;
+  --hi: #ffff55;
+  --ok: #55ff55;
+  --link: #ffff55;
+  --sel-bg: #0000aa;
+  --sel-fg: #fff;
+  --title-glow: none;
+
+  --rule: var(--accent);
+  --rule-height: 2px;
+  --rule-anim: none;
+
+  --panel-bg: transparent;
+  --panel-border: 4px double;
+  --panel-border-color: var(--accent);
+  --panel-radius: 0;
+  --panel-shadow: none;
+  --heading-bg: var(--accent);
+  --heading-fg: #000;
+  --heading-glow: none;
+  --heading-before: '';
+  --heading-after: '';
+  --heading-bleed: var(--space-3); /* heading bar runs edge to edge of the panel */
+
+  --well-bg: #000;
+  --well-border-width: 1px;
+  --well-border-color: var(--dim);
+
+  --btn-bg: transparent;
+  --btn-fg: var(--hi);
+  --btn-border-width: 0;
+  --btn-border-color: transparent;
+  --btn-pad: 2px 0;
+  --btn-shadow: none;
+  --btn-before: '[ ';
+  --btn-after: ' ]';
+  --btn-bracket: var(--fg);
+  --btn-hover-bg: var(--fg);
+  --btn-hover-fg: #000;
+  --chip-border-color: var(--dim);
+  --chip-on-bg: var(--accent);
+  --chip-on-fg: #000;
+
+  --input-bg: #0000aa;
+  --input-fg: #fff;
+  --input-border-color: transparent;
+
+  --th-bg: var(--fg);
+  --th-fg: #000;
+  --th-border: none;
+  --row-alt: transparent;
+
+  --bar-bg: #0000aa;
+  --bar-fg: #fff;
+  --bar-border: none;
+  --bar-shadow: none;
+
+  --logo-fill: repeating-linear-gradient(
+    180deg,
+    #ff5555 0 1em,
+    #ffff55 1em 2em,
+    #55ff55 2em 3em,
+    #55ffff 3em 4em,
+    #5555ff 4em 5em,
+    transparent 5em 6em
+  );
+  --logo-glow: none;
+  --cursor-blink: 1s;
+
+  --pat-rownum: #555;
+  --pat-note: #fff;
+  --pat-inst: #55ffff;
+  --pat-vol: #55ff55;
+  --pat-fx: #ff55ff;
+  --pat-empty: #555;
+  --pat-sep: #555;
+  --pat-beat: #000055;
+  --pat-cur: #0000aa;
+  --scope-bg: #000;
+  --scope-grid: #005555;
+  --scope-wave: #55ff55;
+}
+
+/* ── tracker: editor look, bevelled grey-blue panels and sunken wells ── */
+:root[data-theme='tracker'] {
+  --bg: #1c2133;
+  --bg-image: none;
+  --fg: #e8ecf8;
+  --dim: #8b93b0;
+  --accent: #ffd34d;
+  --hi: #ffd34d;
+  --ok: #7fe0ff;
+  --link: #ffd34d;
+  --sel-bg: #4b5878;
+  --sel-fg: #fff;
+  --title-glow: none;
+  --bevel-light: #8e9ccb;
+  --bevel-dark: #12162a;
+  --raised: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  --sunken: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+
+  --rule: transparent;
+  --rule-height: 0;
+  --rule-anim: none;
+
+  --panel-bg: #4b5878;
+  --panel-border: 2px solid;
+  --panel-border-color: var(--raised);
+  --panel-radius: 0;
+  --panel-shadow: none;
+  --heading-bg: transparent;
+  --heading-fg: var(--accent);
+  --heading-glow: none;
+  --heading-before: '';
+  --heading-after: '';
+  --heading-bleed: 0;
+
+  --well-bg: #000;
+  --well-border-width: 2px;
+  --well-border-color: var(--sunken);
+
+  --btn-bg: #4b5878;
+  --btn-fg: var(--fg);
+  --btn-border-width: 2px;
+  --btn-border-color: var(--raised);
+  --btn-pad: 2px 12px;
+  --btn-shadow: none;
+  --btn-before: '';
+  --btn-after: '';
+  --btn-bracket: var(--fg);
+  --btn-hover-bg: #3c4763;
+  --btn-hover-fg: var(--accent);
+  --chip-border-color: var(--raised);
+  --chip-on-bg: #3c4763;
+  --chip-on-fg: var(--accent);
+
+  --input-bg: #000;
+  --input-fg: var(--fg);
+  --input-border-color: var(--sunken);
+
+  --th-bg: #262d45;
+  --th-fg: var(--accent);
+  --th-border: none;
+  --row-alt: #0b0e1a;
+
+  --bar-bg: #4b5878;
+  --bar-fg: var(--fg);
+  --bar-border: 2px solid var(--bevel-light);
+  --bar-shadow: none;
+
+  --logo-fill: linear-gradient(var(--fg), var(--fg));
+  --logo-glow: none;
+  --cursor-blink: 0.6s;
+
+  --pat-rownum: #8b93b0;
+  --pat-note: #fff;
+  --pat-inst: #ffd34d;
+  --pat-vol: #9dff9d;
+  --pat-fx: #7fe0ff;
+  --pat-empty: #3a4260;
+  --pat-sep: #4b5878;
+  --pat-beat: #151a2e;
+  --pat-cur: #4b5878;
+  --scope-bg: #000;
+  --scope-grid: #2b3354;
+  --scope-wave: #7fe0ff;
+}
+
+/* ── demoscene: cracktro neon, copper rule, glow ── */
+:root[data-theme='demoscene'] {
+  --bg: #07000f;
+  --bg-image: radial-gradient(ellipse at top, #1a0533, #07000f 60%);
+  --fg: #e9dcff;
+  --dim: #8a6fb0;
+  --accent: #22e6ff;
+  --hi: #ff2bd6;
+  --ok: #22e6ff;
+  --link: #22e6ff;
+  --sel-bg: #3a0c5c;
+  --sel-fg: #fff;
+  --title-glow: 0 0 8px currentColor;
+
+  --rule: linear-gradient(90deg, #ff2bd6, #ffe66d, #22e6ff, #8a2bff, #ff2bd6) 0 0 / 200% 100%;
+  --rule-height: 6px;
+  --rule-anim: tj-copper 4s linear infinite;
+
+  --panel-bg: rgb(20 4 40 / 65%);
+  --panel-border: 1px solid;
+  --panel-border-color: #3a1f63;
+  --panel-radius: 4px;
+  --panel-shadow: 0 0 24px rgb(255 43 214 / 12%);
+  --heading-bg: transparent;
+  --heading-fg: #ffe66d;
+  --heading-glow: 0 0 6px #ffe66d;
+  --heading-before: '';
+  --heading-after: '';
+  --heading-bleed: 0;
+
+  --well-bg: #07000f;
+  --well-border-width: 0;
+  --well-border-color: transparent;
+
+  --btn-bg: transparent;
+  --btn-fg: var(--accent);
+  --btn-border-width: 1px;
+  --btn-border-color: var(--accent);
+  --btn-pad: 4px 14px;
+  --btn-shadow: 0 0 8px rgb(34 230 255 / 35%);
+  --btn-before: '';
+  --btn-after: '';
+  --btn-bracket: var(--accent);
+  --btn-hover-bg: var(--accent);
+  --btn-hover-fg: #07000f;
+  --chip-border-color: var(--accent);
+  --chip-on-bg: var(--accent);
+  --chip-on-fg: #07000f;
+
+  --input-bg: #0d0220;
+  --input-fg: var(--fg);
+  --input-border-color: #3a1f63;
+
+  --th-bg: transparent;
+  --th-fg: #ff2bd6;
+  --th-border: 1px solid #ff2bd6;
+  --row-alt: transparent;
+
+  --bar-bg: rgb(7 0 15 / 90%);
+  --bar-fg: var(--fg);
+  --bar-border: 2px solid #ff2bd6;
+  --bar-shadow: 0 -4px 18px rgb(255 43 214 / 35%);
+
+  --logo-fill: linear-gradient(180deg, #ffe66d, #ff2bd6 45%, #22e6ff);
+  --logo-glow: drop-shadow(0 0 6px rgb(255 43 214 / 60%));
+  --cursor-blink: 0.8s;
+
+  --pat-rownum: #6c4f96;
+  --pat-note: #22e6ff;
+  --pat-inst: #ff2bd6;
+  --pat-vol: #9dff9d;
+  --pat-fx: #ffe66d;
+  --pat-empty: #2a1a40;
+  --pat-sep: #2a1a40;
+  --pat-beat: #12052a;
+  --pat-cur: #3a0c5c;
+  --scope-bg: #07000f;
+  --scope-grid: #2a1a40;
+  --scope-wave: #ff2bd6;
+}
+
+/* ── mix: BBS shell, tracker wells, demoscene rule ── */
+:root[data-theme='mix'] {
+  --bg: #000;
+  --bg-image: none;
+  --fg: #aaa;
+  --dim: #555;
+  --accent: #55ffff;
+  --hi: #ffff55;
+  --ok: #55ff55;
+  --link: #ffff55;
+  --sel-bg: #0000aa;
+  --sel-fg: #fff;
+  --title-glow: none;
+  --bevel-light: #7783aa;
+  --bevel-dark: #151a2e;
+
+  --rule: linear-gradient(90deg, #ff5555, #ffff55, #55ff55, #55ffff, #5555ff, #ff55ff);
+  --rule-height: 4px;
+  --rule-anim: none;
+
+  --panel-bg: transparent;
+  --panel-border: 4px double;
+  --panel-border-color: var(--dim);
+  --panel-radius: 0;
+  --panel-shadow: none;
+  --heading-bg: transparent;
+  --heading-fg: var(--accent);
+  --heading-glow: none;
+  --heading-before: '═╡ ';
+  --heading-after: ' ╞═';
+  --heading-bleed: 0;
+
+  --well-bg: #000;
+  --well-border-width: 2px;
+  --well-border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+
+  --btn-bg: transparent;
+  --btn-fg: var(--hi);
+  --btn-border-width: 0;
+  --btn-border-color: transparent;
+  --btn-pad: 2px 0;
+  --btn-shadow: none;
+  --btn-before: '[ ';
+  --btn-after: ' ]';
+  --btn-bracket: var(--fg);
+  --btn-hover-bg: var(--fg);
+  --btn-hover-fg: #000;
+  --chip-border-color: var(--dim);
+  --chip-on-bg: var(--hi);
+  --chip-on-fg: #000;
+
+  --input-bg: #000;
+  --input-fg: #fff;
+  --input-border-color: var(--dim);
+
+  --th-bg: transparent;
+  --th-fg: var(--accent);
+  --th-border: 1px solid var(--dim);
+  --row-alt: transparent;
+
+  --bar-bg: #3a4566;
+  --bar-fg: #fff;
+  --bar-border: 2px solid var(--bevel-light);
+  --bar-shadow: none;
+
+  --logo-fill: linear-gradient(var(--accent), var(--accent));
+  --logo-glow: drop-shadow(0 0 6px rgb(85 255 255 / 50%));
+  --cursor-blink: 1s;
+
+  --pat-rownum: #7783aa;
+  --pat-note: #fff;
+  --pat-inst: #ffff55;
+  --pat-vol: #55ff55;
+  --pat-fx: #ff55ff;
+  --pat-empty: #333a52;
+  --pat-sep: #3a4566;
+  --pat-beat: #0a0d1a;
+  --pat-cur: #3a4566;
+  --scope-bg: #000;
+  --scope-grid: #1a2238;
+  --scope-wave: #55ffff;
+}
+
+@keyframes tj-copper {
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes tj-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ── Base styles (theme-independent; everything themed comes from tokens) ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  font: var(--font-size) / var(--line) var(--font);
+  color: var(--fg);
+  background:
+    var(--bg-image) fixed,
+    var(--bg);
+}
+h1,
+h2,
+h3 {
+  font-size: inherit;
+  font-weight: normal;
+  margin: 0;
+}
+pre {
+  font: inherit;
+  margin: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+a {
+  color: var(--link);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+  }
+}

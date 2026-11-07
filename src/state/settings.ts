@@ -1,8 +1,13 @@
 import type { Format } from '../formats'
 import type { Interpolation } from '../engine'
 
+export const THEMES = ['bbs', 'tracker', 'demoscene', 'mix'] as const
+export type Theme = (typeof THEMES)[number]
+
 export interface Settings {
   version: 1
+  /** applied as <html data-theme>; unknown value → DEFAULTS.theme */
+  theme: Theme
   player: { interpolation: Interpolation; stereoSeparation: number; lastViz: string }
   jukebox: {
     shuffle: boolean
@@ -19,6 +24,7 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   version: 1,
+  theme: 'bbs',
   player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern' },
   jukebox: {
     shuffle: true,
