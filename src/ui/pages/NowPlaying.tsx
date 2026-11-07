@@ -1,5 +1,9 @@
 // Full-screen view and share-link target, with VIZ / MESSAGE / SAMPLES tabs.
 import { useEffect, useState } from 'react'
+import { parseFile } from '../../formats'
+import type { ParsedFile } from '../../formats'
+import type { ManifestEntry } from '../../library/manifest'
+import { fetchBytes } from '../../net'
 import { formatRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
@@ -35,7 +39,11 @@ export function NowPlaying({ id }: { id: string }) {
   const [where, setWhere] = useState('')
   const [link, setLink] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>(() => takeTab() ?? 'viz')
-  const isTracker = current?.format !== 'midi'
+  const entry = entries.find((e) => e.id === id) ?? current
+  const playing = entry !== null && entry.id === current?.id
+  const preview = usePreview(playing ? null : entry)
+  const song = playing ? engine.current?.song : preview.song
+  const isTracker = entry?.format !== 'midi'
   const shown: Tab = tab === 'samples' && !isTracker ? 'viz' : tab
 
   useEffect(() => {
@@ -75,61 +83,102 @@ export function NowPlaying({ id }: { id: string }) {
     }
   }
 
-  // A song that isn't playing yet shows its info (with PLAY) until it is started.
-  const viewed = entries.find((e) => e.id === id)
-  if (viewed && viewed.id !== current?.id) return <InfoPanel key={viewed.id} entry={viewed} />
-
   return (
-    <section className={styles.panel}>
-      <h2 className={styles.heading}>NOW PLAYING</h2>
-      <div className={styles.npHead}>
-        <span className={styles.title}>{current?.title ?? 'Nothing playing'}</span>
-        <span className={styles.note}>
-          {current
-            ? `${current.file} · ${current.format.toUpperCase()} · ${current.channels}ch · ${where}`
-            : ''}
-        </span>
-      </div>
-      <div className={styles.tabs} role="tablist" aria-label="View">
-        {(['viz', 'message', ...(isTracker ? ['samples'] : [])] as Tab[]).map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={t === shown}
-            className={`${styles.chip} ${t === shown ? styles.chipOn : ''}`}
-            onClick={() => setTab(t)}
-          >
-            {t === 'viz' ? 'VIZ' : t.toUpperCase()}
-          </button>
-        ))}
-      </div>
-      {shown === 'viz' && (
-        <>
-          <div className={styles.npViz}>
-            <VisualizerHost vizId={settings.player.lastViz} engine={engine} label="Visualizer" />
-          </div>
-          <VizPicker />
-          <ChannelStrip />
-        </>
-      )}
-      {shown === 'message' && <MessageScroller />}
-      {shown === 'samples' && <SampleBrowser key={`samples:${current?.id}`} />}
-      <p>
-        <button className={styles.btn} onClick={() => void share()} disabled={!current}>
-          SHARE
-        </button>
-      </p>
-      {link && (
-        <input
-          className={styles.search}
-          readOnly
-          aria-label="Share link"
-          value={link}
-          onFocus={(e) => e.currentTarget.select()}
-          ref={(el) => el?.select()}
-        />
-      )}
-      {current && <InfoPanel key={`info:${current.id}`} entry={current} details={false} />}
-    </section>
+    <>
+      {entry && <InfoPanel key={`info:${entry.id}`} entry={entry} details={false} />}
+      <section className={styles.panel}>
+        <h2 className={styles.heading}>{playing ? 'NOW PLAYING' : 'PREVIEW'}</h2>
+        <div className={styles.npHead}>
+          <span className={styles.title}>{entry?.title ?? 'Nothing playing'}</span>
+          <span className={styles.note}>
+            {entry
+              ? `${entry.file} · ${entry.format.toUpperCase()} · ${entry.channels}ch` +
+                (playing ? ` · ${where}` : '')
+              : ''}
+          </span>
+        </div>
+        <div className={styles.tabs} role="tablist" aria-label="View">
+          {(['viz', 'message', ...(isTracker ? ['samples'] : [])] as Tab[]).map((t) => (
+            <button
+              key={t}
+              role="tab"
+              aria-selected={t === shown}
+              className={`${styles.chip} ${t === shown ? styles.chipOn : ''}`}
+              onClick={() => setTab(t)}
+            >
+              {t === 'viz' ? 'VIZ' : t.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        {preview.error && <p className={styles.error}>{preview.error}</p>}
+        {shown === 'viz' && (
+          <>
+            <div className={styles.npViz}>
+              <VisualizerHost
+                vizId={settings.player.lastViz}
+                engine={engine}
+                label="Visualizer"
+                preview={playing ? undefined : preview.song}
+              />
+            </div>
+            <VizPicker />
+            {playing && <ChannelStrip />}
+          </>
+        )}
+        {shown === 'message' && <MessageScroller message={entry?.message ?? ''} />}
+        {shown === 'samples' && (
+          <SampleBrowser
+            key={`samples:${entry?.id}`}
+            samples={song?.kind === 'tracker' ? song.samples : []}
+          />
+        )}
+        {playing && (
+          <p>
+            <button className={styles.btn} onClick={() => void share()}>
+              SHARE
+            </button>
+          </p>
+        )}
+        {link && (
+          <input
+            className={styles.search}
+            readOnly
+            aria-label="Share link"
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            ref={(el) => el?.select()}
+          />
+        )}
+      </section>
+    </>
   )
+}
+
+/** Fetches and parses a song that isn't playing, so its pattern and samples can be shown.
+ *  ponytail: dropped local files have no url and preview nothing until played; expose their parsed
+ *  data from PlayerContext if that matters. */
+function usePreview(entry: ManifestEntry | null): { song?: ParsedFile; error?: string } {
+  const [state, setState] = useState<{ id: string; song?: ParsedFile; error?: string } | null>(null)
+  const url = entry?.url ?? null
+  const entryId = entry?.id ?? null
+  const midiTarget = entry?.midiTarget ?? undefined
+  useEffect(() => {
+    if (url === null || entryId === null) return
+    const abort = new AbortController()
+    fetchBytes(url, { signal: abort.signal }).then(
+      (bytes) => {
+        try {
+          setState({ id: entryId, song: parseFile(bytes, midiTarget ? { midiTarget } : undefined) })
+        } catch (err) {
+          setState({ id: entryId, error: err instanceof Error ? err.message : 'Parse failed' })
+        }
+      },
+      (err: unknown) => {
+        if (!abort.signal.aborted)
+          setState({ id: entryId, error: err instanceof Error ? err.message : 'Load failed' })
+      },
+    )
+    return () => abort.abort()
+  }, [url, entryId, midiTarget])
+  return state !== null && state.id === entryId ? state : {}
 }

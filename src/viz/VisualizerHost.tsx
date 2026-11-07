@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AudioEngine } from '../audio/AudioEngine'
+import { SCOPE_LEN } from '../engine'
+import type { Snapshot } from '../engine'
+import { NOTE_NONE } from '../formats'
+import type { ParsedFile } from '../formats'
 import { getVisualizer } from './index'
 import type { Frame, Palette, VisualizerInstance } from './types'
 
@@ -46,13 +50,45 @@ function readPalette(): Palette {
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
 
+/** The song at its first row / first tick with nothing sounding: what a preview draws. */
+function stillSnapshot(song: ParsedFile): Snapshot {
+  const n = song.kind === 'tracker' ? song.channels : 16
+  return {
+    frame: 0,
+    seconds: 0,
+    pos:
+      song.kind === 'tracker'
+        ? {
+            kind: 'tracker',
+            order: 0,
+            pattern: song.orders[0] ?? 0,
+            row: 0,
+            tick: 0,
+            speed: song.initialSpeed,
+            tempo: song.initialTempo,
+          }
+        : { kind: 'midi', tick: 0, tempo: 6e7 / (song.tempoMap[0]?.usPerBeat ?? 500000) },
+    ch: Array.from({ length: n }, () => ({
+      active: false,
+      note: NOTE_NONE,
+      ins: 0,
+      volume: 0,
+      pan: 0,
+      triggered: false,
+    })),
+    scopes: Array.from({ length: n }, () => new Float32Array(SCOPE_LEN)),
+  }
+}
+
 export function VisualizerHost(props: {
   vizId: string
   engine: AudioEngine
   label: string
   className?: string
+  /** draw this song, still and silent, instead of what the engine plays */
+  preview?: ParsedFile
 }) {
-  const { vizId, engine, label, className } = props
+  const { vizId, engine, label, className, preview } = props
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const instanceRef = useRef<VisualizerInstance | null>(null)
@@ -82,6 +118,7 @@ export function VisualizerHost(props: {
     const freq = new Uint8Array(1024)
     const size = { width: 0, height: 0, dpr: 1 }
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const still = preview ? { snap: stillSnapshot(preview), song: preview } : null
     const resize = (): void => {
       const dpr = window.devicePixelRatio || 1
       size.width = box.clientWidth
@@ -102,12 +139,15 @@ export function VisualizerHost(props: {
       raf = requestAnimationFrame(loop)
       const dt = last === 0 ? 0 : (now - last) / 1000
       last = now
-      const latest = engine.latest()
+      const latest = still ?? engine.latest()
       const analyser = engine.analyser
       let f: Frame | null = null
-      if (latest && analyser) {
-        analyser.getFloatTimeDomainData(time)
-        analyser.getByteFrequencyData(freq)
+      if (latest && (analyser || still)) {
+        // A preview is silent: time/freq stay zero rather than showing the playing song's audio.
+        if (analyser && !still) {
+          analyser.getFloatTimeDomainData(time)
+          analyser.getByteFrequencyData(freq)
+        }
         f = { snap: latest.snap, song: latest.song, time, freq, ...size, reducedMotion, palette }
       }
       try {
@@ -138,7 +178,7 @@ export function VisualizerHost(props: {
       instance.dispose?.()
       instanceRef.current = null
     }
-  }, [id, vizId, engine, label])
+  }, [id, vizId, engine, label, preview])
 
   return (
     <div

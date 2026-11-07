@@ -1,15 +1,15 @@
 // Sample list with waveform and audition (trackers only).
 import { useEffect, useRef, useState } from 'react'
+import type { Sample } from '../../formats'
 import { usePlayer } from '../../state/PlayerContext'
 import styles from '../ui.module.css'
+import { showToast } from './Toast'
 
 const MIN_BUFFER_HZ = 8000 // AudioBuffer sample-rate floor in older browsers
 const MAX_BUFFER_HZ = 96000
 
-export function SampleBrowser() {
-  const { engine, current } = usePlayer()
-  const song = engine.current?.id === current?.id ? engine.current?.song : undefined
-  const samples = song?.kind === 'tracker' ? song.samples : []
+export function SampleBrowser({ samples }: { samples: readonly Sample[] }) {
+  const { engine } = usePlayer()
   const [picked, setPicked] = useState(-1)
   const source = useRef<AudioBufferSourceNode | null>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -39,11 +39,18 @@ export function SampleBrowser() {
     }
   }, [sample])
 
-  const audition = (i: number): void => {
+  const audition = async (i: number): Promise<void> => {
     setPicked(i)
     const s = samples[i]
+    if (!s || s.data.length === 0) return
+    try {
+      await engine.unlock() // a preview can be auditioned before anything has played
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Audio is not available')
+      return
+    }
     const ctx = engine.context
-    if (!s || !ctx || s.data.length === 0) return
+    if (!ctx) return
     source.current?.stop()
     // Played once at c2spd, i.e. the sample's own pitch at C-4. ponytail: loops are not auditioned.
     const bufHz = Math.max(MIN_BUFFER_HZ, Math.min(MAX_BUFFER_HZ, s.c2spd))
@@ -68,7 +75,7 @@ export function SampleBrowser() {
             <button
               className={`${styles.chip} ${i === picked ? styles.chipOn : ''}`}
               aria-pressed={i === picked}
-              onClick={() => audition(i)}
+              onClick={() => void audition(i)}
             >
               {String(i + 1).padStart(2, '0')} {s.name || '(unnamed)'} · {s.data.length}
             </button>

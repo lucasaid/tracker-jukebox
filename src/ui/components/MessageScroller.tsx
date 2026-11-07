@@ -1,10 +1,7 @@
 // Scrolling song message (the sample names / comments BBS people used for ads).
-import { usePlayer } from '../../state/PlayerContext'
 import styles from '../ui.module.css'
 
-export function MessageScroller() {
-  const { current } = usePlayer()
-  const message = current?.message ?? ''
+export function MessageScroller({ message }: { message: string }) {
   if (message === '') return <p className={styles.note}>No message in this file.</p>
   const lines = message.split('\n').length
   return (

@@ -1258,7 +1258,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
     - Clicking a column header sorts by it, and clicking again reverses the direction. The default sort is title ascending.
     - A search box using `filterEntries` semantics. Format chips come from `FORMATS`. Channel chips are the distinct `channels` values present.
     - `InfoPanel`: metadata, message, sample names, Play, ★, and for MIDI an "MT-32 mode" toggle (P26).
-    - **Changed after P28 (user decision):** clicking a title opens `#/play/<id>` without playing. NowPlaying shows that song's `InfoPanel` (with PLAY) until it is the current song, then the tabs plus a compact `InfoPanel`. Only share links (with `?order=`/`?t=`) auto-play or show `ConnectOverlay`.
+    - **Changed after P28 (user decision):** clicking a title opens `#/play/<id>` without playing. NowPlaying puts a compact `InfoPanel` (PLAY, ★, MT-32) at the top and shows the VIZ/MESSAGE/SAMPLES tabs before playing too: the file is fetched and parsed for a PREVIEW, and `VisualizerHost` takes an optional `preview` song that it draws still and silent (first pattern, row 0). Only share links (with `?order=`/`?t=`) auto-play or show `ConnectOverlay`.
 36. **Favorites:** ★ toggles `toggleFavorite`. Local entries show no star.
 37. **Drag & drop:**
     - `DropZone` covers the Browse and Jukebox pages. Dropped files go through `addLocal`.
