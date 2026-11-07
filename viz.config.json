@@ -12,6 +12,7 @@
     "superscope": true,
     "swirl": true,
     "tunnel": true,
+    "particles": true,
     "plasma": true,
     "starfield": true,
     "copper": true
