@@ -1,4 +1,5 @@
 import { channels } from './channels'
+import { copper, plasma, starfield } from './demo'
 import { pattern } from './pattern'
 import { scope } from './scope'
 import type { VisualizerDef } from './types'
@@ -6,8 +7,15 @@ import type { VisualizerDef } from './types'
 export type { Frame, Palette, VisualizerDef, VisualizerInstance } from './types'
 export { VisualizerHost } from './VisualizerHost'
 
-/** Final order: pattern, scope, channels, plasma, starfield, copper. Entries are added from P16. */
-export const visualizers: readonly VisualizerDef[] = [pattern, scope, channels]
+/** Final order: pattern, scope, channels, plasma, starfield, copper. */
+export const visualizers: readonly VisualizerDef[] = [
+  pattern,
+  scope,
+  channels,
+  plasma,
+  starfield,
+  copper,
+]
 
 /** Unknown id → the first visualizer. */
 export function getVisualizer(id: string): VisualizerDef {

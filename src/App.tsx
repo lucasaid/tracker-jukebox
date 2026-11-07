@@ -1,39 +1,20 @@
-// Dev player (P13): a plain control panel for the AudioEngine. Replaced by the themed app from P17.
+// Dev player (P13, on the P17 hooks): a plain control panel. Replaced by the themed app from P18.
 import { useEffect, useState } from 'react'
-import { AudioEngine } from './audio/AudioEngine'
-import type { EngineStatus } from './audio/AudioEngine'
-import type { Interpolation } from './engine'
-import { loadManifest } from './library/manifest'
-import type { ManifestEntry } from './library/manifest'
+import { PlayerProvider, usePlayer } from './state/PlayerContext'
+import { SettingsProvider, useSettings } from './state/SettingsContext'
 import { VisualizerHost, visualizers } from './viz'
 
-const DEBUG = new URLSearchParams(location.search).get('debug') === '1'
-
-export function App() {
-  const [engine] = useState(() => new AudioEngine({ debug: DEBUG }))
-  const [entries, setEntries] = useState<ManifestEntry[]>([])
+function DevPlayer() {
+  const player = usePlayer()
+  const { settings, update } = useSettings()
+  const { engine, status, entries, manifestError, muteMask } = player
   const [selected, setSelected] = useState('')
-  const [status, setStatus] = useState<EngineStatus>('locked')
   const [message, setMessage] = useState('')
   const [where, setWhere] = useState('')
-  const [interpolation, setInterpolation] = useState<Interpolation>('nearest')
-  const [stereo, setStereo] = useState(1)
-  const [muteMask, setMuteMask] = useState(0)
-  const [channels, setChannels] = useState(0)
-  const [vizId, setVizId] = useState('pattern')
 
   useEffect(() => {
-    const e = engine
-    loadManifest().then(setEntries, (err: unknown) =>
-      setMessage(err instanceof Error ? err.message : 'Manifest failed'),
-    )
-    const off = e.on((ev) => {
-      if (ev.type === 'status') setStatus(ev.status)
-      else if (ev.type === 'error') setMessage(ev.error.message)
-      else if (ev.type === 'stats') console.table(ev.stats)
-    })
     const timer = setInterval(() => {
-      const l = e.latest()
+      const l = engine.latest()
       if (l?.snap.pos.kind === 'tracker') {
         const p = l.snap.pos
         setWhere(
@@ -41,45 +22,26 @@ export function App() {
         )
       }
     }, 100)
-    return () => {
-      clearInterval(timer)
-      off()
-    }
+    return () => clearInterval(timer)
   }, [engine])
 
-  const run = async (fn: (e: AudioEngine) => Promise<void> | void) => {
-    const e = engine
-    try {
-      await e.unlock()
-      await fn(e)
-    } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError'))
-        setMessage(err instanceof Error ? err.message : 'Failed')
-    }
-  }
+  const song = engine.current?.song
+  const channels = song?.kind === 'tracker' ? song.channels : 0
+  const { interpolation, stereoSeparation, lastViz } = settings.player
+  const setPlayer = (patch: Partial<typeof settings.player>) =>
+    update((s) => ({ ...s, player: { ...s.player, ...patch } }))
 
   const choose = (id: string) => {
     setSelected(id)
     setMessage('')
-    void run(async (e) => {
-      const entry = entries.find((x) => x.id === id)
-      if (!entry?.url) return
-      const loaded = await e.load({ id, url: entry.url }, { autoplay: true })
-      setChannels(loaded.song.kind === 'tracker' ? loaded.song.channels : 0)
-      setMuteMask(0)
-      e.setOptions({ muteMask: 0 })
-    })
+    player
+      .play(id)
+      .catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Failed'))
   }
 
   const step = (d: number) => {
     const p = engine.latest()?.snap.pos
     if (p?.kind === 'tracker') engine.seek({ order: Math.max(0, p.order + d) })
-  }
-
-  const toggleMute = (c: number) => {
-    const next = muteMask ^ (1 << c)
-    setMuteMask(next)
-    engine.setOptions({ muteMask: next })
   }
 
   return (
@@ -88,6 +50,7 @@ export function App() {
       <p>
         {status}
         {message && ` · ${message}`}
+        {manifestError && ` · ${manifestError.message}`}
       </p>
       <select size={12} value={selected} onChange={(e) => choose(e.target.value)}>
         {entries
@@ -99,16 +62,14 @@ export function App() {
           ))}
       </select>
       <p>
-        <button onClick={() => (status === 'playing' ? engine.pause() : engine.play())}>
-          {status === 'playing' ? 'Pause' : 'Play'}
-        </button>
+        <button onClick={player.toggle}>{status === 'playing' ? 'Pause' : 'Play'}</button>
         <button onClick={() => step(-1)}>Order −</button>
         <button onClick={() => step(1)}>Order +</button>
       </p>
       <p>{where}</p>
       <label>
         Visualizer{' '}
-        <select value={vizId} onChange={(e) => setVizId(e.target.value)}>
+        <select value={lastViz} onChange={(e) => setPlayer({ lastViz: e.target.value })}>
           {visualizers.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}
@@ -117,7 +78,7 @@ export function App() {
         </select>
       </label>
       <div style={{ height: 240 }}>
-        <VisualizerHost vizId={vizId} engine={engine} label="Visualizer" />
+        <VisualizerHost vizId={lastViz} engine={engine} label="Visualizer" />
       </div>
       <label>
         Interpolation{' '}
@@ -125,10 +86,7 @@ export function App() {
           value={interpolation}
           onChange={(e) => {
             const v = e.target.value
-            if (v === 'nearest' || v === 'linear' || v === 'cubic') {
-              setInterpolation(v)
-              engine.setOptions({ interpolation: v })
-            }
+            if (v === 'nearest' || v === 'linear' || v === 'cubic') setPlayer({ interpolation: v })
           }}
         >
           <option>nearest</option>
@@ -143,12 +101,8 @@ export function App() {
           min={0}
           max={1}
           step={0.05}
-          value={stereo}
-          onChange={(e) => {
-            const v = Number(e.target.value)
-            setStereo(v)
-            engine.setOptions({ stereoSeparation: v })
-          }}
+          value={stereoSeparation}
+          onChange={(e) => setPlayer({ stereoSeparation: Number(e.target.value) })}
         />
       </label>
       <p>
@@ -157,12 +111,22 @@ export function App() {
             <input
               type="checkbox"
               checked={Boolean(muteMask & (1 << c))}
-              onChange={() => toggleMute(c)}
+              onChange={(e) => player.setMuted(c, e.target.checked)}
             />
             mute {c + 1}{' '}
           </label>
         ))}
       </p>
     </main>
+  )
+}
+
+export function App() {
+  return (
+    <SettingsProvider>
+      <PlayerProvider>
+        <DevPlayer />
+      </PlayerProvider>
+    </SettingsProvider>
   )
 }

@@ -56,6 +56,7 @@ export class AudioEngine {
   private abort: AbortController | null = null
   private options: PlayerOptions = { ...DEFAULT_PLAYER_OPTIONS }
   private snapshots: Stamped[] = []
+  private lastPick: Stamped | null = null
   private listeners = new Set<(e: EngineEvent) => void>()
   private waiting: { id: string; ok: () => void; fail: (e: PlaybackError) => void } | null = null
   private readonly debug: boolean
@@ -176,6 +177,7 @@ export class AudioEngine {
       const durationSec = computeLength(song).seconds
       this.activeId = src.id
       this.snapshots = []
+      this.lastPick = null
       const ready = new Promise<void>((ok, fail) => {
         this.waiting = { id: src.id, ok, fail }
       })
@@ -234,7 +236,24 @@ export class AudioEngine {
       }
     }
     pick ??= this.snapshots[0]
-    return pick ? { snap: pick.snap, song: this.loaded.song } : null
+    if (!pick) return null
+    // ChannelState.triggered is true in one snapshot only. Carry the flags of snapshots skipped
+    // since the last pick into this one, and report each trigger once.
+    // ponytail: one consumer at a time, a second latest() caller would miss triggers.
+    const flags = pick.snap.ch
+    if (pick === this.lastPick) for (const c of flags) c.triggered = false
+    else {
+      const from = this.lastPick?.at ?? -1
+      for (const s of this.snapshots) {
+        if (s.at <= from || s.at >= pick.at) continue
+        s.snap.ch.forEach((c, i) => {
+          const t = flags[i]
+          if (c.triggered && t) t.triggered = true
+        })
+      }
+      this.lastPick = pick
+    }
+    return { snap: pick.snap, song: this.loaded.song }
   }
 
   on(listener: (e: EngineEvent) => void): () => void {
