@@ -1291,7 +1291,11 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
     - It shows an ANSI-style header and a DIAL button.
     - DIAL unlocks audio and, unless `intro.skip`, plays the modem intro while typing `ATDT 555-1993`, then `CONNECT 14400`. A SKIP button aborts it.
     - It then shows the menu: [B]rowse, [J]ukebox, [C]redits, [T]heme (cycles), plus a "skip intro next time" checkbox bound to `intro.skip`.
-41. **Modem intro sound:** DTMF for `5551993` (80ms tones, 50ms gaps), a 2100Hz answer tone for 0.8s, then 2.2s of alternating band-limited noise bursts and 1200/2400Hz tones. Total about 4s.
+41. **Modem intro sound:** one pre-rendered mono buffer, about 4.7s, modelled on a real call and band-limited to 300–3400 Hz:
+    - DTMF for `5551993` (80ms tones, 50ms gaps), then a 0.3s pause.
+    - A 2100Hz answer tone for 0.8s with a 180° phase reversal every 450ms.
+    - 0.6s of V.21 FSK at 300 baud (980/1180Hz and 1650/1850Hz at once).
+    - 0.55s of 8-PSK on a 2400Hz carrier at 1200 baud, then 1.25s on an 1800Hz carrier at 2400 baud (the long hiss).
 42. **Credits (P22):**
     - For each manifest entry: title, file, and the first 3 non-empty lines of `message`.
     - Then: "Font: Web437 IBM VGA 8x16 by VileR, Oldschool PC Font Pack, CC BY-SA 4.0" with a link to int10h.org.
