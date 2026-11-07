@@ -1,4 +1,5 @@
 import type { MidiSong, ParsedFile, Song, SoundBank } from '../formats'
+import { createSequencer } from './sequencer'
 
 export type Interpolation = 'nearest' | 'linear' | 'cubic'
 
@@ -90,8 +91,16 @@ export function createMidiPlayer(
 
 /** Silent dry-run; never throws. */
 export function computeLength(
-  _song: ParsedFile,
-  _maxSeconds = 1800,
+  song: ParsedFile,
+  maxSeconds = 1800,
 ): { seconds: number; loops: boolean; capped: boolean } {
-  throw new Error('Not implemented (P7)')
+  if (song.kind === 'midi') throw new Error('Not implemented (P23)')
+  const seq = createSequencer(song)
+  let seconds = 0
+  // One tick lasts 2.5 / tempo seconds (decision 13).
+  while (seq.advance()) {
+    seconds += 2.5 / seq.state.tempo
+    if (seconds >= maxSeconds) return { seconds: maxSeconds, loops: false, capped: true }
+  }
+  return { seconds, loops: seq.state.loops, capped: false }
 }
