@@ -4,6 +4,7 @@ import { formatRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import { VisualizerHost } from '../../viz'
+import { formatTime } from '../components/PlayerBar'
 import { ChannelStrip } from '../components/ChannelStrip'
 import { MessageScroller } from '../components/MessageScroller'
 import { SampleBrowser } from '../components/SampleBrowser'
@@ -44,9 +45,11 @@ export function NowPlaying() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const pos = engine.latest()?.snap.pos
+      const snap = engine.latest()?.snap
+      const pos = snap?.pos
       if (pos?.kind === 'tracker')
         setWhere(`order ${pos.order} · row ${pos.row} · speed ${pos.speed}`)
+      else if (pos) setWhere(`${Math.round(pos.tempo)} BPM · ${formatTime(snap?.seconds ?? 0)}`)
     }, 250)
     return () => clearInterval(timer)
   }, [engine])
