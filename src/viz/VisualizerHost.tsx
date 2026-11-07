@@ -4,7 +4,7 @@ import { SCOPE_LEN } from '../engine'
 import type { Snapshot } from '../engine'
 import { NOTE_NONE } from '../formats'
 import type { ParsedFile } from '../formats'
-import { getVisualizer } from './index'
+import { getVisualizer } from './registry'
 import type { Frame, Palette, VisualizerInstance } from './types'
 
 const TOKENS: readonly (readonly [keyof Palette, string])[] = [

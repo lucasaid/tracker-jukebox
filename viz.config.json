@@ -1,0 +1,11 @@
+{
+  "enabled": {
+    "pattern": true,
+    "scope": true,
+    "channels": true,
+    "bars": true,
+    "plasma": true,
+    "starfield": true,
+    "copper": true
+  }
+}
