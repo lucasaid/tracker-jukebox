@@ -7,3 +7,5 @@ public/soundfonts
 *.wav
 *.tsbuildinfo
 prompt.md
+trackers/temp_for_sort
+TODO.md
