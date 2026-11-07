@@ -5,8 +5,25 @@ export { ByteReader, ParseError, UnsupportedFormatError, decodeCp437 } from './b
 export { MT32_TO_GM } from './mt32-to-gm'
 
 /** Magic-byte sniff (decision 11). Never throws. null = not a supported format. */
-export function detectFormat(_bytes: Uint8Array): Format | null {
-  throw new Error('Not implemented (P3)')
+export function detectFormat(bytes: Uint8Array): Format | null {
+  const at = (pos: number, str: string): boolean => {
+    if (pos + str.length > bytes.length) return false
+    for (let i = 0; i < str.length; i++) if (bytes[pos + i] !== str.charCodeAt(i)) return false
+    return true
+  }
+  const u8 = (pos: number): number => bytes[pos] ?? -1
+  if (at(0, 'MThd')) return 'midi'
+  if (at(0x2c, 'SCRM')) return 's3m'
+  if (at(20, '!Scream!') && u8(29) === 2) return 'stm'
+  if (at(0, 'MTM') && u8(3) === 0x10) return 'mtm'
+  if (at(0, 'if') && u8(0x6e) <= 64 && u8(0x6f) <= 128 && bytes.length > 0x6f) return '669'
+  if (bytes.length >= 1084) {
+    const magic = String.fromCharCode(...bytes.subarray(1080, 1084))
+    if (['M.K.', 'M!K!', 'FLT4', '4CHN', '6CHN', '8CHN', 'FLT8'].includes(magic)) return 'mod'
+    const m = /^(\d\d)CH$/.exec(magic)
+    if (m && Number(m[1]) >= 10 && Number(m[1]) <= 32) return 'mod'
+  }
+  return null
 }
 
 /** Throws ParseError | UnsupportedFormatError. Never returns partial data. */
