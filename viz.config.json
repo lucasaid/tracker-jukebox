@@ -9,6 +9,7 @@
     "terrain": true,
     "vu": true,
     "warp": true,
+    "superscope": true,
     "plasma": true,
     "starfield": true,
     "copper": true

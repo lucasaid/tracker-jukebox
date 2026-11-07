@@ -7,6 +7,7 @@ import { oscilloscope } from './oscilloscope'
 import { pattern } from './pattern'
 import { scope } from './scope'
 import { spectrogram } from './spectrogram'
+import { superscope } from './superscope'
 import { terrain } from './terrain'
 import { vu } from './vu'
 import { warp } from './warp'
@@ -23,6 +24,7 @@ export const all: readonly VisualizerDef[] = [
   terrain,
   vu,
   warp,
+  superscope,
   plasma,
   starfield,
   copper,
