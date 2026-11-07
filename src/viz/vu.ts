@@ -37,7 +37,8 @@ function drawMeter(
 
   const cx = x + w / 2
   const pivotY = y + h * 0.92
-  const r = Math.min(h * 0.75, (w / 2 - 2 * m) / Math.sin(SWING_RAD))
+  // 0.62: leaves room above the arc for the tick labels (drawn out to 1.1 r plus the font height)
+  const r = Math.min(h * 0.62, (w / 2 - 2 * m) / Math.sin(SWING_RAD))
   const angle = (p: number): number => -SWING_RAD + p * 2 * SWING_RAD
 
   // scale arc, red above 0 VU
