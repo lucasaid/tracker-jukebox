@@ -14,6 +14,7 @@ import { superscope } from './superscope'
 import { swirl } from './swirl'
 import { terrain } from './terrain'
 import { tunnel } from './tunnel'
+import { vectorscope } from './vectorscope'
 import { vu } from './vu'
 import { warp } from './warp'
 import type { VisualizerDef } from './types'
@@ -35,6 +36,7 @@ export const all: readonly VisualizerDef[] = [
   particles,
   radial,
   geiss,
+  vectorscope,
   plasma,
   starfield,
   copper,

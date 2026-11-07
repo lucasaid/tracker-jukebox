@@ -1,5 +1,6 @@
 // Analog stereo VU meters. L/R are rebuilt from the per-channel scopes and pans, since the analyser is mono.
 // Keeps its own colours (a cream meter face), like bars.
+import { SCOPE_LEN } from '../engine'
 import type { Frame, VisualizerDef, VisualizerInstance } from './types'
 
 const MIN_DB = -20
@@ -13,6 +14,30 @@ const SWING_RAD = (50 * Math.PI) / 180 // needle travel either side of vertical
 const TICKS_DB = [-20, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3]
 
 /** Scale position 0..1 for a VU reading. A real VU scale is linear in amplitude, so dB marks bunch up at the top. */
+/**
+ * Rebuilds the stereo mix from the per-channel scopes and pans (linear pan law) into outL/outR
+ * (SCOPE_LEN long). Returns the sample count written.
+ */
+export function mixLR(f: Frame, outL: Float32Array, outR: Float32Array): number {
+  const { scopes, ch } = f.snap
+  const len = Math.min(scopes[0]?.length ?? 0, outL.length, outR.length)
+  outL.fill(0)
+  outR.fill(0)
+  for (let c = 0; c < scopes.length; c++) {
+    const s = scopes[c]
+    if (!s) continue
+    const pan = ch[c]?.pan ?? 0
+    const gl = (1 - pan) * 0.5
+    const gr = (1 + pan) * 0.5
+    for (let i = 0; i < len; i++) {
+      const v = s[i] ?? 0
+      outL[i] = (outL[i] ?? 0) + v * gl
+      outR[i] = (outR[i] ?? 0) + v * gr
+    }
+  }
+  return len
+}
+
 function scalePos(db: number): number {
   const lo = 10 ** (MIN_DB / 20)
   const hi = 10 ** (MAX_DB / 20)
@@ -103,26 +128,21 @@ function vuInstance(): VisualizerInstance {
   const ledSec = [0, 0]
   const rms = [0, 0]
   const peak = [0, 0]
+  const left = new Float32Array(SCOPE_LEN)
+  const right = new Float32Array(SCOPE_LEN)
 
-  /** Fills rms/peak for L and R from the channel scopes, panned with a linear law. */
+  /** Fills rms/peak for L and R. */
   // ponytail: ignores settings.player.stereoSeparation and the MIDI/tracker master gain, so the
   // reading is relative; REF_DBFS is the calibration.
   function measure(f: Frame): void {
-    const { scopes, ch } = f.snap
-    const len = scopes[0]?.length ?? 0
+    const len = mixLR(f, left, right)
     let sumL = 0
     let sumR = 0
     peak[0] = 0
     peak[1] = 0
     for (let i = 0; i < len; i++) {
-      let l = 0
-      let r = 0
-      for (let c = 0; c < scopes.length; c++) {
-        const v = scopes[c]?.[i] ?? 0
-        const pan = ch[c]?.pan ?? 0
-        l += v * (1 - pan) * 0.5
-        r += v * (1 + pan) * 0.5
-      }
+      const l = left[i] ?? 0
+      const r = right[i] ?? 0
       sumL += l * l
       sumR += r * r
       peak[0] = Math.max(peak[0] ?? 0, Math.abs(l))

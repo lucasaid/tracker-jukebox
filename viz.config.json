@@ -15,6 +15,7 @@
     "particles": true,
     "radial": true,
     "geiss": true,
+    "vectorscope": true,
     "plasma": true,
     "starfield": true,
     "copper": true
