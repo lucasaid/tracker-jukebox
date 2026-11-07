@@ -5,8 +5,9 @@ import { readFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join, sep } from 'node:path'
-import { computeLength } from '../src/engine'
-import { parseFile } from '../src/formats'
+import { computeLength, createMidiPlayer, createTrackerPlayer } from '../src/engine'
+import { parseFile, parseSoundBank } from '../src/formats'
+import type { SoundBank } from '../src/formats'
 import { describe } from '../src/library/manifest'
 import {
   idOf,
@@ -17,10 +18,17 @@ import {
   trackersDir,
   walk,
 } from './curation'
+import { encodeWav } from './wav'
 
 const HOST = '127.0.0.1' // loopback only: the manager writes files in the repo
 const PORT = 5198
 const MAX_BODY_BYTES = 1024 * 1024
+// ponytail: previews are the first 60 s, rendered whole before sending (~10 MB WAV);
+// stream it in chunks or add a start offset if longer previews are wanted
+const PREVIEW_SEC = 60
+const PREVIEW_HZ = 44100
+const BANK_PATH = join(root, 'public', 'soundfonts', 'GeneralUser-GS.sf2')
+let bank: SoundBank | null = null // parsed on the first MIDI preview, then kept
 
 interface FileRow {
   id: string
@@ -74,6 +82,24 @@ function scan(): FileRow[] {
   })
 }
 
+/** Renders the start of a file with our engine, as WAV bytes. `id` must be a file in trackers/. */
+function preview(id: string, midiTarget: 'gm' | 'mt32'): Uint8Array {
+  const path = walk(trackersDir).find((p) => idOf(p) === id) // never a path built from input
+  if (!path) throw new Error(`Unknown file: ${id}`)
+  const song = parseFile(new Uint8Array(readFileSync(path)), { midiTarget })
+  let player
+  if (song.kind === 'tracker') player = createTrackerPlayer(song, PREVIEW_HZ)
+  else {
+    bank ??= parseSoundBank(new Uint8Array(readFileSync(BANK_PATH)))
+    player = createMidiPlayer(song, bank, PREVIEW_HZ)
+  }
+  const frames = PREVIEW_SEC * PREVIEW_HZ
+  const left = new Float32Array(frames)
+  const right = new Float32Array(frames)
+  const n = player.render(left, right, frames)
+  return encodeWav(left.subarray(0, n), right.subarray(0, n), PREVIEW_HZ)
+}
+
 /** Runs `pnpm manifest` and returns its output. */
 function rebuild(): Promise<{ ok: boolean; log: string }> {
   return new Promise((resolve) => {
@@ -117,6 +143,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       'text/html; charset=utf-8',
       readFileSync(join(root, 'scripts', 'manage.html'), 'utf8'),
     )
+  } else if (req.method === 'GET' && req.url?.startsWith('/api/preview?')) {
+    const q = new URL(req.url, `http://${HOST}`).searchParams
+    try {
+      const wav = preview(q.get('id') ?? '', q.get('midi') === 'mt32' ? 'mt32' : 'gm')
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': wav.length })
+      res.end(wav)
+    } catch (err) {
+      send(res, 400, 'text/plain', err instanceof Error ? err.message : 'Preview failed')
+    }
   } else if (req.method === 'GET' && req.url === '/api/state') {
     json(res, 200, { files: scan(), curation: loadCuration() })
   } else if (req.method === 'POST' && req.url === '/api/save') {

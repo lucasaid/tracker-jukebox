@@ -7,6 +7,11 @@ export function writeWav(
   right: Float32Array,
   sampleRate: number,
 ): void {
+  writeFileSync(path, encodeWav(left, right, sampleRate))
+}
+
+/** The bytes writeWav writes; the library manager serves them as an audio preview. */
+export function encodeWav(left: Float32Array, right: Float32Array, sampleRate: number): Uint8Array {
   const frames = left.length
   const dataBytes = frames * 4
   const view = new DataView(new ArrayBuffer(44 + dataBytes))
@@ -31,7 +36,7 @@ export function writeWav(
     view.setInt16(44 + i * 4, pcm(left[i] as number), true)
     view.setInt16(46 + i * 4, pcm(right[i] as number), true)
   }
-  writeFileSync(path, new Uint8Array(view.buffer))
+  return new Uint8Array(view.buffer)
 }
 
 /** 16-bit PCM or 32-bit float; anything else throws Error('Unsupported WAV'). */

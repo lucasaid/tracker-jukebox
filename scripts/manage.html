@@ -78,6 +78,18 @@
       #status.dirty {
         color: var(--warn);
       }
+      #audio {
+        height: 28px;
+      }
+      #nowPreview {
+        color: var(--accent);
+      }
+      button.play {
+        padding: 2px 8px;
+        background: var(--panel);
+        color: var(--accent);
+        border: 1px solid var(--line);
+      }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -121,18 +133,22 @@
     <p class="note">
       Unchecked files are left out of public/music and the manifest. A blank title uses the one
       parsed from the file. Save writes scripts/curation.json + scripts/midi-overrides.json and
-      reruns pnpm manifest.
+      reruns pnpm manifest. ▶ renders the first 60 s with our engine (MIDI uses the MIDI column's
+      choice, saved or not).
     </p>
     <div class="bar">
       <input id="filter" type="search" placeholder="filter id, title, message…" />
       <label><input id="onlyExcluded" type="checkbox" /> excluded only</label>
       <button id="save" disabled>SAVE &amp; REBUILD</button>
       <span id="status">loading…</span>
+      <audio id="audio" controls preload="none"></audio>
+      <span id="nowPreview"></span>
     </div>
     <table>
       <thead>
         <tr>
           <th>Publish</th>
+          <th>Hear</th>
           <th>File</th>
           <th>Fmt</th>
           <th>Ch</th>
@@ -192,6 +208,13 @@
             markDirty()
           }
           cell(tr).append(box)
+          const play = document.createElement('button')
+          play.className = 'play'
+          play.textContent = '▶'
+          play.disabled = f.error !== null
+          play.setAttribute('aria-label', `Preview ${f.id}`)
+          play.onclick = () => preview(f)
+          cell(tr).append(play)
           cell(tr, f.id)
           cell(tr, f.format ? f.format.toUpperCase() : '—')
           cell(tr, f.error ? '' : String(f.channels))
@@ -245,6 +268,31 @@
             `${files.length - state.exclude.size} of ${files.length} published · ${shown} shown`
           $('status').className = ''
         }
+      }
+
+      // One shared player. The server renders on request, so the first sound takes a moment.
+      const audio = $('audio')
+      let previewing = null
+      function preview(f) {
+        const midi = f.format === 'midi' ? (state.midi[f.id] ?? 'gm') : 'gm'
+        const key = `${f.id}|${midi}`
+        if (previewing === key) {
+          if (audio.paused) void audio.play()
+          else audio.pause()
+          return
+        }
+        previewing = key
+        $('nowPreview').textContent = `rendering ${f.id}…`
+        audio.src = `/api/preview?id=${encodeURIComponent(f.id)}&midi=${midi}`
+        audio.play().catch(() => {}) // failures are reported by the 'error' event below
+      }
+      audio.onplaying = () => {
+        if (previewing)
+          $('nowPreview').textContent = previewing.replace('|gm', '').replace('|mt32', ' (MT-32)')
+      }
+      audio.onerror = () => {
+        $('nowPreview').textContent = `preview failed: ${previewing ?? ''}`
+        previewing = null
       }
 
       async function load() {
