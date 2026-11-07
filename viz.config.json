@@ -7,6 +7,7 @@
     "oscilloscope": true,
     "spectrogram": true,
     "terrain": true,
+    "vu": true,
     "plasma": true,
     "starfield": true,
     "copper": true
