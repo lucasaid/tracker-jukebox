@@ -1146,7 +1146,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
       - `tracker`: `ProTracker (M.K.)`, or `ProTracker (<magic>)` for the other signatures. Speed 6, tempo 125.
     - **STM:**
       - Detection: `!Scream!` at 20 and byte 29 = 2.
-      - Layout: title 20; tempo byte @32 → initialSpeed = tempo >> 4 (initialTempo 125); patterns @33; globalVolume @34; 31 samples × 32 @48 (name 12, data paragraph u16le @14 ×16 = file offset, length u16le @16, loopStart @18, loopEnd @20 with 0xFFFF = no loop, volume @22, c2spd u16le @24); orders 128 @1040, ending at the first value ≥ 99; patterns @1168 = 64 × 4 × 4 bytes.
+      - Layout: title 20; tempo byte @32 → initialSpeed = tempo >> 4 (initialTempo 125); patterns @33; globalVolume @34; 31 samples × 32 @48 (name 12, data paragraph u16le @14 ×16 = file offset, length u16le @16, loopStart @18, loopEnd @20 with 0xFFFF = no loop, volume @22, c2spd u16le @24); orders 128 @1040, ending at the first value ≥ 99 or ≥ the pattern count (KTULHU lists pattern 42 of 42, so that order ends the list instead of throwing `Bad pattern index`); patterns @1168 = 64 × 4 × 4 bytes.
       - Cell: note b0 (251–255 = none, else `(b0>>4)*12 + (b0&15) + 36`), ins = `b1>>3`, vol = `(b1&7)|((b2&0xF0)>>1)` (65 = none), cmd = `b2&0x0F` (1 = A), param b3.
       - 4ch, `tracker` = `Scream Tracker 2.<minor>`.
     - **S3M:**
@@ -1415,7 +1415,7 @@ Phase 0 was done as a user-requested exception, and it covers all of P1.
 - **Scope:** `formats/mod.ts`, `formats/stm.ts`, `parseFile` in `index.ts` (MIDI and the not-yet-written formats → `UnsupportedFormatError`), tests.
 - **Acceptance:** the tests show:
   1. The Expected values for 12WARIOR, 90210, 1CARESS, CANTINA and KTULHU.
-  2. Each file truncated to 600 bytes throws `ParseError`.
+  2. Each file truncated to 600 bytes throws `ParseError`. The tests call `parseMod`/`parseStm` directly: through `parseFile`, a 600-byte MOD is `UnsupportedFormatError('unknown format')` because `detectFormat` needs 1084 bytes to see the MOD signature.
 - `feat(formats): MOD and STM parsers`
 
 **P5 · S3M parser**
