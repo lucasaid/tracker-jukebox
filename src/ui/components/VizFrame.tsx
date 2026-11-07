@@ -1,12 +1,16 @@
 // The visualizer well with a FULLSCREEN toggle. Fullscreen fills the window with the visualizer
 // (plus the browser's Fullscreen API where allowed); the player bar stays on top and, like the
 // toggle, fades out after IDLE_SEC without input and comes back on any mouse move or key.
+// On entering fullscreen and on every song change there, a now-playing card types in the title.
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { ManifestEntry } from '../../library/manifest'
+import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import type { Settings } from '../../state/settings'
 import { getVisualizer, visualizers } from '../../viz'
 import styles from '../ui.module.css'
+import { formatTime } from './PlayerBar'
 
 const IDLE_SEC = 3
 
@@ -17,9 +21,41 @@ export function nextViz(s: Settings): Settings {
   return next ? { ...s, player: { ...s.player, lastViz: next.id } } : s
 }
 
+/** Plays its CSS intro/outro once per mount; VizFrame remounts it per song via `key`. */
+function TitleCard(props: { entry: ManifestEntry }) {
+  const { entry } = props
+  const title = entry.title || entry.file
+  const meta = [
+    entry.format.toUpperCase(),
+    entry.tracker,
+    `${entry.channels}CH`,
+    entry.loops || entry.durationSec <= 0 ? null : formatTime(entry.durationSec),
+  ].filter(Boolean)
+  return (
+    <div className={styles.titleCard} role="status">
+      <div className={styles.titleLabel}>NOW PLAYING</div>
+      <div className={styles.titleRow}>
+        <span
+          className={styles.titleText}
+          style={{
+            width: `${title.length}ch`,
+            animationTimingFunction: `steps(${title.length})`,
+            animationDuration: `${Math.min(title.length * 45, 1400)}ms`,
+          }}
+        >
+          {title}
+        </span>
+        <span className={styles.titleCursor} aria-hidden="true" />
+      </div>
+      <div className={styles.titleMeta}>{meta.join(' · ')}</div>
+    </div>
+  )
+}
+
 export function VizFrame(props: { children: ReactNode }) {
   const [full, setFull] = useState(false)
   const { settings, update } = useSettings()
+  const { current } = usePlayer()
 
   useEffect(() => {
     if (!full) return
@@ -66,6 +102,7 @@ export function VizFrame(props: { children: ReactNode }) {
   return (
     <div className={`${styles.npViz} ${full ? styles.vizFull : ''}`}>
       {props.children}
+      {full && current && <TitleCard key={current.id} entry={current} />}
       <div className={styles.fullBtns}>
         {full && (
           <button className={styles.btn} title="Next visualizer" onClick={() => update(nextViz)}>

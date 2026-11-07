@@ -437,3 +437,112 @@
   opacity: 0;
   pointer-events: none;
 }
+
+/* VizFrame now-playing card: wipes in, types the title, holds, fades out */
+.titleCard {
+  position: absolute;
+  left: calc(var(--gutter) * 2);
+  bottom: calc(var(--bar-height) + var(--gutter) * 2);
+  max-width: calc(100% - var(--gutter) * 4);
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-4);
+  border-left: 4px solid var(--accent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg) 85%, transparent),
+    color-mix(in srgb, var(--bg) 40%, transparent) 70%,
+    transparent
+  );
+  pointer-events: none;
+  overflow: hidden;
+  animation:
+    titleCardIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both,
+    titleCardOut 0.8s ease-in 5.5s forwards;
+}
+.titleLabel {
+  display: inline-block;
+  color: var(--accent);
+  letter-spacing: 0.3em;
+  border-bottom: 2px solid var(--accent);
+  transform-origin: left;
+  animation: titleWipe 0.4s 0.15s ease-out both;
+}
+.titleRow {
+  display: flex;
+  align-items: center;
+  margin-top: var(--space-2);
+  font-size: calc(var(--font-size) * 2);
+  line-height: 1.1;
+  color: var(--hi);
+  text-shadow:
+    0 0 14px color-mix(in srgb, var(--hi) 55%, transparent),
+    3px 3px 0 var(--bg);
+}
+.titleText {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  animation-name: titleType;
+  animation-delay: 0.35s;
+  animation-fill-mode: both;
+}
+.titleCursor {
+  flex: none;
+  width: 0.6em;
+  height: 0.9em;
+  margin-left: 0.1em;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: titleBlink 1s steps(1) infinite;
+}
+.titleMeta {
+  margin-top: var(--space-2);
+  color: var(--fg);
+  letter-spacing: 0.1em;
+  animation: titleCardIn 0.5s 0.9s ease-out both;
+}
+@keyframes titleCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes titleCardOut {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(4px);
+  }
+}
+@keyframes titleWipe {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes titleType {
+  from {
+    width: 0;
+  }
+}
+@keyframes titleBlink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .titleCard {
+    animation: titleCardOut 0.8s ease-in 5.5s forwards;
+  }
+  .titleLabel,
+  .titleText,
+  .titleCursor,
+  .titleMeta {
+    animation: none;
+  }
+}
