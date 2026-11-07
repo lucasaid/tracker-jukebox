@@ -1,0 +1,290 @@
+<!doctype html>
+<!-- Served by scripts/manage.ts (pnpm manage). Dev-only, never deployed. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Library Manager</title>
+    <style>
+      :root {
+        --bg: #0b0b14;
+        --panel: #14142a;
+        --fg: #d8d8e8;
+        --dim: #7a7a99;
+        --accent: #5fd7ff;
+        --warn: #ff8f6b;
+        --line: #2a2a4a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          13px/1.4 ui-monospace,
+          Menlo,
+          monospace;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+        color: var(--accent);
+      }
+      p.note {
+        margin: 0 0 12px;
+        color: var(--dim);
+      }
+      .bar {
+        position: sticky;
+        top: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 0;
+        background: var(--bg);
+      }
+      input[type='search'],
+      input[type='text'],
+      select {
+        background: var(--panel);
+        color: var(--fg);
+        border: 1px solid var(--line);
+        padding: 4px 6px;
+        font: inherit;
+      }
+      input[type='text'] {
+        width: 100%;
+      }
+      button {
+        background: var(--accent);
+        color: var(--bg);
+        border: 0;
+        padding: 6px 12px;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #status {
+        color: var(--dim);
+      }
+      #status.dirty {
+        color: var(--warn);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 4px 6px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--dim);
+        font-weight: normal;
+      }
+      tr.excluded td {
+        opacity: 0.4;
+      }
+      tr.excluded td:first-child {
+        opacity: 1;
+      }
+      .err {
+        color: var(--warn);
+      }
+      .msg {
+        color: var(--dim);
+        white-space: pre-wrap;
+        max-height: 4.2em;
+        overflow: hidden;
+      }
+      pre#log {
+        background: var(--panel);
+        padding: 8px;
+        max-height: 30vh;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Library Manager</h1>
+    <p class="note">
+      Unchecked files are left out of public/music and the manifest. A blank title uses the one
+      parsed from the file. Save writes scripts/curation.json + scripts/midi-overrides.json and
+      reruns pnpm manifest.
+    </p>
+    <div class="bar">
+      <input id="filter" type="search" placeholder="filter id, title, message…" />
+      <label><input id="onlyExcluded" type="checkbox" /> excluded only</label>
+      <button id="save" disabled>SAVE &amp; REBUILD</button>
+      <span id="status">loading…</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Publish</th>
+          <th>File</th>
+          <th>Fmt</th>
+          <th>Ch</th>
+          <th>Length</th>
+          <th style="width: 30%">Title</th>
+          <th>MIDI</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <pre id="log" hidden></pre>
+    <script>
+      // All file data is set with textContent / value, never as HTML: messages are untrusted text.
+      const $ = (id) => document.getElementById(id)
+      let files = []
+      let state = { exclude: new Set(), titles: {}, midi: {} }
+      let dirty = false
+
+      const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+      const cell = (tr, text, cls) => {
+        const td = tr.insertCell()
+        if (text !== undefined) td.textContent = text
+        if (cls) td.className = cls
+        return td
+      }
+      const markDirty = () => {
+        dirty = true
+        $('save').disabled = false
+        $('status').textContent = 'unsaved changes'
+        $('status').className = 'dirty'
+      }
+
+      function render() {
+        const q = $('filter').value.trim().toLowerCase()
+        const onlyEx = $('onlyExcluded').checked
+        const body = $('rows')
+        body.replaceChildren()
+        for (const f of files) {
+          const title = state.titles[f.id] ?? ''
+          const hay = `${f.id} ${f.parsedTitle} ${title} ${f.message}`.toLowerCase()
+          if (q && !hay.includes(q)) continue
+          const excluded = state.exclude.has(f.id)
+          if (onlyEx && !excluded) continue
+          const tr = body.insertRow()
+          tr.className = excluded ? 'excluded' : ''
+
+          const box = document.createElement('input')
+          box.type = 'checkbox'
+          box.checked = !excluded
+          box.disabled = f.error !== null
+          box.setAttribute('aria-label', `Publish ${f.id}`)
+          box.onchange = () => {
+            if (box.checked) state.exclude.delete(f.id)
+            else state.exclude.add(f.id)
+            tr.className = box.checked ? '' : 'excluded'
+            markDirty()
+          }
+          cell(tr).append(box)
+          cell(tr, f.id)
+          cell(tr, f.format ? f.format.toUpperCase() : '—')
+          cell(tr, f.error ? '' : String(f.channels))
+          cell(tr, f.error ? '' : f.loops ? `${fmtTime(f.durationSec)} ↻` : fmtTime(f.durationSec))
+
+          const titleTd = cell(tr)
+          if (f.error) {
+            titleTd.textContent = f.error
+            titleTd.className = 'err'
+          } else {
+            const input = document.createElement('input')
+            input.type = 'text'
+            input.value = title
+            input.placeholder = f.parsedTitle
+            input.setAttribute('aria-label', `Title for ${f.id}`)
+            input.oninput = () => {
+              const v = input.value.trim()
+              if (v === '') delete state.titles[f.id]
+              else state.titles[f.id] = v
+              markDirty()
+            }
+            titleTd.append(input)
+          }
+
+          const midiTd = cell(tr)
+          if (f.format === 'midi') {
+            const sel = document.createElement('select')
+            sel.setAttribute('aria-label', `MIDI target for ${f.id}`)
+            for (const [v, label] of [
+              ['gm', 'GM'],
+              ['mt32', 'MT-32'],
+            ]) {
+              const o = document.createElement('option')
+              o.value = v
+              o.textContent = label
+              sel.append(o)
+            }
+            sel.value = state.midi[f.id] ?? 'gm'
+            sel.onchange = () => {
+              if (sel.value === 'mt32') state.midi[f.id] = 'mt32'
+              else delete state.midi[f.id]
+              markDirty()
+            }
+            midiTd.append(sel)
+          }
+          cell(tr, f.message, 'msg')
+        }
+        const shown = body.rows.length
+        if (!dirty) {
+          $('status').textContent =
+            `${files.length - state.exclude.size} of ${files.length} published · ${shown} shown`
+          $('status').className = ''
+        }
+      }
+
+      async function load() {
+        const res = await fetch('/api/state')
+        const data = await res.json()
+        files = data.files
+        state = {
+          exclude: new Set(data.curation.exclude),
+          titles: { ...data.curation.titles },
+          midi: { ...data.curation.midi },
+        }
+        dirty = false
+        $('save').disabled = true
+        render()
+      }
+
+      $('filter').oninput = render
+      $('onlyExcluded').onchange = render
+      $('save').onclick = async () => {
+        $('save').disabled = true
+        $('status').textContent = 'saving…'
+        const res = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...state, exclude: [...state.exclude] }),
+        })
+        const out = await res.json()
+        $('log').hidden = false
+        $('log').textContent = out.error ?? out.log
+        if (res.ok && out.ok) await load()
+        else {
+          $('status').textContent = 'save failed (see log)'
+          $('status').className = 'dirty'
+          $('save').disabled = false
+        }
+      }
+      window.onbeforeunload = () => (dirty ? true : undefined)
+      load().catch((err) => {
+        $('status').textContent = `failed to load: ${err.message}`
+      })
+    </script>
+  </body>
+</html>
