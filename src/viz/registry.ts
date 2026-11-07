@@ -7,6 +7,7 @@ import { oscilloscope } from './oscilloscope'
 import { pattern } from './pattern'
 import { scope } from './scope'
 import { spectrogram } from './spectrogram'
+import { terrain } from './terrain'
 import type { VisualizerDef } from './types'
 
 /** Every visualizer, in display order. */
@@ -17,6 +18,7 @@ export const all: readonly VisualizerDef[] = [
   bars,
   oscilloscope,
   spectrogram,
+  terrain,
   plasma,
   starfield,
   copper,

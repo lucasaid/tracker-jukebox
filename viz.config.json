@@ -6,6 +6,7 @@
     "bars": true,
     "oscilloscope": true,
     "spectrogram": true,
+    "terrain": true,
     "plasma": true,
     "starfield": true,
     "copper": true
