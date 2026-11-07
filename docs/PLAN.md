@@ -1325,6 +1325,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
       - The default program is 0.
       - When `target` = `mt32`, program changes go through `MT32_TO_GM`. Drums are not remapped.
     - **Gain:** `(vel/127)² · (cc7/127)² · (cc11/127)² · 10^(−attenuationDb/20) · env`, and the mix is `Σ · 0.25`, clamped. CC7 defaults to 100 and CC11 to 127.
+    - **Changed after P28 (MIDI was ~20 dB quieter than trackers):** `initialAttenuation` is scaled by 0.4 (the E-mu/FluidSynth convention the bank is voiced for), the mix is `Σ · 2`, and a peak limiter (instant attack, 0.3 s release, −1 dBFS) replaces the plain clamp. Measured over 2 min of each file: MIDI RMS −11 to −24 dB (median −20) vs trackers −11 to −20 dB (most −18); every MIDI peak ≤ −1 dBFS, no clipping.
     - **Pan:** `clamp(zone.pan + (cc10 − 64)/64)`, then `stereoSeparation`.
     - **Pitch:** rate = `2^((key − rootKey)·100 + tuneCents + bendCents)/1200) · zone.sampleRate / sampleRate`, where `bendCents = bend/8192 · range · 100`. The range defaults to 2 semitones and is set by RPN 0,0 (CC101 = 0, CC100 = 0, then CC6).
     - **Controllers:** CC64 ≥ 64 holds note-offs until it's released. CC121 resets CC7, CC11, CC64, the bend and the RPN. CC123 releases all notes on that channel.

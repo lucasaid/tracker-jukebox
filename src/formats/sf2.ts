@@ -225,7 +225,8 @@ export function parseSf2(bytes: Uint8Array): SoundBank {
           loopStart: s.startLoop + off(GEN.startloopAddrsOffset, GEN.startloopAddrsCoarse) - from,
           loopEnd: s.endLoop + off(GEN.endloopAddrsOffset, GEN.endloopAddrsCoarse) - from,
           loopMode: modes === 1 || modes === 3 ? modes : 0,
-          attenuationDb: Math.max(0, both(GEN.initialAttenuation, 0)) / 10,
+          // ×0.4: banks are voiced on E-mu hardware / FluidSynth, which scale this generator by 0.4
+          attenuationDb: (Math.max(0, both(GEN.initialAttenuation, 0)) * 0.4) / 10,
           pan: Math.max(-1, Math.min(1, both(GEN.pan, 0) / 500)),
           env: {
             delayS: seconds(both(GEN.delayVolEnv, -12000)),

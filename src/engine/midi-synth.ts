@@ -126,7 +126,12 @@ export function stepEnv(e: EnvState): number {
 const VOICES = 64
 const CHANNELS = 16
 const DRUMS_BANK = 128
-const MIX_GAIN = 0.25
+/** Set from loudness measurements against the trackers (see docs/PLAN.md decision 46); the
+ *  limiter below keeps the loudest files from clipping. */
+const MIX_GAIN = 2
+/** Output peak the limiter holds, and how fast its gain recovers (per second, multiplicative). */
+const LIMIT = 0.89 // −1 dBFS
+const LIMIT_RELEASE_SEC = 0.3
 const TAIL_SEC = 1 // matches computeLength: last event + 1 s
 
 interface Voice {
@@ -229,6 +234,9 @@ export function createMidiSynth(
   let scopeAt = 0
   let ageCounter = 0
   let evIdx = 0
+  /** limiter gain, 0..1 */
+  let lim = 1
+  const limRelease = Math.pow(1 / LIMIT, 1 / (LIMIT_RELEASE_SEC * sampleRate))
   let frame = 0
   let ended = false
   const stats: PlayerStats = { unknownFx: 0, voices: 0 }
@@ -401,9 +409,16 @@ export function createMidiSynth(
       }
       v.pos = pos
     }
+    // Peak limiter: instant attack, exponential release. MIDI files differ by ~20 dB in level, so
+    // a fixed gain loud enough for the quiet ones would clip the loud ones.
+    // ponytail: no look-ahead, so attacks are slightly squared off; add a short delay line if audible
     for (let i = start; i < start + n; i++) {
-      left[i] = Math.max(-1, Math.min(1, left[i] as number))
-      right[i] = Math.max(-1, Math.min(1, right[i] as number))
+      const l = left[i] as number
+      const r = right[i] as number
+      const peak = Math.max(Math.abs(l), Math.abs(r)) * lim
+      lim = peak > LIMIT ? (lim * LIMIT) / peak : Math.min(1, lim * limRelease)
+      left[i] = Math.max(-1, Math.min(1, l * lim))
+      right[i] = Math.max(-1, Math.min(1, r * lim))
     }
     scopeAt = (ring + n) & scopeMask
   }
@@ -416,6 +431,7 @@ export function createMidiSynth(
     }
     for (const s of scopeRing) s.fill(0)
     evIdx = 0
+    lim = 1
     ended = false
   }
 
