@@ -1193,7 +1193,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
 17. **Levels:**
     - Per voice: `sample · (vol/64) · (globalVolume/64)`.
     - Mix: `Σ / sqrt(channels) · mixGain · FORMAT_GAIN[format]`, hard-clamped to ±1.
-    - `FORMAT_GAIN` starts at 1 for every format. P10 (MOD/MTM), P11 (STM/669) and P12 (S3M) each set their formats' value once, to the value that makes the mean ΔdB of that format's compare rows closest to 0. The value is recorded in docs/PLAN.md.
+    - `FORMAT_GAIN` starts at 1 for every format. P10 (MOD/MTM), P11 (STM/669) and P12 (S3M) each set their formats' value once, to the value that makes the mean ΔdB of that format's compare rows closest to 0. The value is recorded in docs/PLAN.md. P9 sets `mod` and `mtm` to a provisional 0.8 (at 1 the 90210 render peaked at 0 dBFS); P10 replaces it.
 18. **End and loops:**
     - Playback ends at the end of the order list, or when the sequencer reaches an (order, row) it has already played in this run because of a jump, break or end-of-list wrap. In the second case `loops = true`.
     - Pattern-loop (E6/SB) repeats are not counted as loops.

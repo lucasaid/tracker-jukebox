@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { Fx, NOTE_NONE } from '../formats'
 import type { Cell, Pattern, Song } from '../formats'
-import { computeLength } from './index'
+import { computeLength, createTrackerPlayer } from './index'
+import { createChannel, runTick, startRow } from './effects'
+import { createVoice, mixVoice } from './mixer'
+import { periodOf, periodToHz } from './pitch'
 import { createSequencer } from './sequencer'
 
 type Row = [row: number, fx: Fx, param: number]
@@ -138,5 +141,117 @@ describe('sequencer', () => {
     const song = songOf([0], [pat(64)])
     expect(computeLength(song).seconds).toBeCloseTo(7.68, 9)
     expect(computeLength(song, 5)).toEqual({ seconds: 5, loops: false, capped: true })
+  })
+})
+
+const withCell = (c: Partial<Cell>): Cell => ({ ...emptyCell(), ...c })
+const sampleOf = (data: number[], volume = 64) => ({
+  name: '',
+  data: Float32Array.from(data),
+  loopStart: 0,
+  loopEnd: 0,
+  volume,
+  c2spd: 8363,
+})
+const stats = { unknownFx: 0, voices: 0 }
+
+describe('pitch', () => {
+  it('C-4 at c2spd 8363 is period 428, about 8287 Hz', () => {
+    expect(periodOf(48, 8363)).toBe(428)
+    expect(Math.abs(periodToHz(428) - 8287)).toBeLessThan(1)
+  })
+})
+
+describe('mixer', () => {
+  const run = (v: ReturnType<typeof createVoice>, frames: number, gain = 1) => {
+    const l = new Float32Array(frames)
+    const r = new Float32Array(frames)
+    mixVoice(v, l, r, 0, frames, 'nearest', gain, gain)
+    return l
+  }
+  it('nearest at step 1.0 reproduces the sample data exactly', () => {
+    const v = createVoice(256)
+    const data = Float32Array.from([0.5, -0.25, 0.125, -1, 0.75])
+    Object.assign(v, { data, step: 1, active: true })
+    expect(Array.from(run(v, 5))).toEqual(Array.from(data))
+  })
+  it('a looped voice wraps to loopStart', () => {
+    const v = createVoice(256)
+    Object.assign(v, {
+      data: Float32Array.from([0, 1, 2, 3, 4, 5, 6, 7]),
+      step: 1,
+      active: true,
+      loopStart: 2,
+      loopEnd: 6,
+    })
+    expect(Array.from(run(v, 12))).toEqual([0, 1, 2, 3, 4, 5, 2, 3, 4, 5, 2, 3])
+  })
+  it('a muted (zero-gain) voice contributes 0 but keeps moving', () => {
+    const v = createVoice(256)
+    Object.assign(v, { data: Float32Array.from([1, 1, 1, 1]), step: 1, active: true })
+    expect(Array.from(run(v, 2, 0))).toEqual([0, 0])
+    expect(v.pos).toBe(2)
+  })
+})
+
+describe('effects', () => {
+  const song = { ...songOf([0], [pat(1)]), samples: [sampleOf([1, 1, 1, 1])] }
+  const start = (fx: number, param: number) => {
+    const ch = createChannel(0, 256)
+    startRow(ch, withCell({ note: 48, ins: 1, fx: fx as Fx, param }), song, stats)
+    return ch
+  }
+  it.each([
+    [Fx.Vibrato, 0x4f],
+    [Fx.PortaUp, 4],
+    [Fx.PortaDown, 4],
+  ])('fx %i changes the period on ticks > 0 only', (fx, param) => {
+    const ch = start(fx, param)
+    expect(ch.outPeriod).toBe(428)
+    const cell = withCell({ fx, param })
+    runTick(ch, cell, 1, song)
+    runTick(ch, cell, 2, song)
+    expect(ch.outPeriod).not.toBe(428)
+  })
+  it('tone porta slides toward the target without passing it', () => {
+    const ch = start(Fx.None, 0)
+    startRow(ch, withCell({ note: 60, fx: Fx.TonePorta, param: 255 }), song, stats)
+    expect(ch.period).toBe(428)
+    runTick(ch, withCell({ fx: Fx.TonePorta }), 1, song)
+    expect(ch.period).toBe(periodOf(60, 8363))
+  })
+})
+
+describe('tracker player', () => {
+  const noteSong = (): Song => {
+    const p = pat(4)
+    p.cells[0] = withCell({ note: 48, ins: 1 })
+    return { ...songOf([0], [p]), samples: [sampleOf(Array.from({ length: 64 }, () => 0.5))] }
+  }
+  const renderAll = (muteMask: number) => {
+    const player = createTrackerPlayer(noteSong(), 8000, { muteMask })
+    const l = new Float32Array(5000)
+    const r = new Float32Array(5000)
+    const n = player.render(l, r, 5000)
+    return { n, l, player }
+  }
+  it('plays audio, ends, and a muted channel is silent', () => {
+    const loud = renderAll(0)
+    expect(loud.l.some((x) => x !== 0)).toBe(true)
+    expect(loud.n).toBe(3840) // 4 rows x 6 ticks x 160 frames
+    const silent = renderAll(1)
+    expect(silent.l.every((x) => x === 0)).toBe(true)
+  })
+  it('rejects a bad sample rate', () => {
+    expect(() => createTrackerPlayer(noteSong(), 0)).toThrow(RangeError)
+  })
+  it('seek({ order }) lands at that order and clears ended', () => {
+    const song = { ...songOf([0, 0, 0], [pat(2)]) }
+    const player = createTrackerPlayer(song, 8000)
+    player.render(new Float32Array(100000), new Float32Array(100000), 100000)
+    expect(player.ended).toBe(true)
+    player.seek({ order: 2 })
+    expect(player.ended).toBe(false)
+    expect(player.snapshot().pos).toMatchObject({ order: 2, row: 0 })
   })
 })

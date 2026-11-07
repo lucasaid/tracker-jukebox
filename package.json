@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "manifest": "tsx scripts/manifest.ts",
+    "render": "tsx scripts/render.ts",
     "format": "prettier --write .",
     "check": "tsc -b && eslint . && prettier --check . && vitest run"
   },
