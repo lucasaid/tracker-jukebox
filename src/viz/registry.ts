@@ -10,6 +10,7 @@ import { spectrogram } from './spectrogram'
 import { superscope } from './superscope'
 import { swirl } from './swirl'
 import { terrain } from './terrain'
+import { tunnel } from './tunnel'
 import { vu } from './vu'
 import { warp } from './warp'
 import type { VisualizerDef } from './types'
@@ -27,6 +28,7 @@ export const all: readonly VisualizerDef[] = [
   warp,
   superscope,
   swirl,
+  tunnel,
   plasma,
   starfield,
   copper,

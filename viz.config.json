@@ -11,6 +11,7 @@
     "warp": true,
     "superscope": true,
     "swirl": true,
+    "tunnel": true,
     "plasma": true,
     "starfield": true,
     "copper": true
