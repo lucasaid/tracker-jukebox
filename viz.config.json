@@ -13,6 +13,7 @@
     "swirl": true,
     "tunnel": true,
     "particles": true,
+    "radial": true,
     "plasma": true,
     "starfield": true,
     "copper": true

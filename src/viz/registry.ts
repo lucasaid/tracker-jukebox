@@ -6,6 +6,7 @@ import { copper, plasma, starfield } from './demo'
 import { oscilloscope } from './oscilloscope'
 import { particles } from './particles'
 import { pattern } from './pattern'
+import { radial } from './radial'
 import { scope } from './scope'
 import { spectrogram } from './spectrogram'
 import { superscope } from './superscope'
@@ -31,6 +32,7 @@ export const all: readonly VisualizerDef[] = [
   swirl,
   tunnel,
   particles,
+  radial,
   plasma,
   starfield,
   copper,
