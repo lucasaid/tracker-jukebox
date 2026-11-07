@@ -4,6 +4,7 @@ import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeLength } from '../src/engine'
 import { parseFile } from '../src/formats'
+import type { MidiTarget } from '../src/formats'
 import { describe } from '../src/library/manifest'
 import type { Manifest, ManifestEntry } from '../src/library/manifest'
 
@@ -19,6 +20,21 @@ function walk(dir: string): string[] {
     .flatMap((d) => (d.isDirectory() ? walk(join(dir, d.name)) : [join(dir, d.name)]))
 }
 
+/** id → MidiTarget; anything else in the JSON is a hard error. */
+function loadOverrides(): Record<string, MidiTarget> {
+  const raw: unknown = JSON.parse(
+    readFileSync(join(root, 'scripts', 'midi-overrides.json'), 'utf8'),
+  )
+  if (typeof raw !== 'object' || raw === null) throw new Error('midi-overrides.json: not an object')
+  const result: Record<string, MidiTarget> = {}
+  for (const [id, v] of Object.entries(raw)) {
+    if (v !== 'gm' && v !== 'mt32') throw new Error(`midi-overrides.json: bad target for ${id}`)
+    result[id] = v
+  }
+  return result
+}
+const overrides = loadOverrides()
+
 const out = (line: string): void => void process.stdout.write(`${line}\n`)
 
 const entries: ManifestEntry[] = []
@@ -29,7 +45,7 @@ for (const path of walk(trackers)) {
   const id = relative(trackers, path).split(sep).join('/').toLowerCase()
   const bytes = new Uint8Array(readFileSync(path))
   try {
-    const parsed = parseFile(bytes)
+    const parsed = parseFile(bytes, { midiTarget: overrides[id] ?? 'gm' })
     const { seconds, loops } = computeLength(parsed)
     entries.push(
       describe(parsed, {

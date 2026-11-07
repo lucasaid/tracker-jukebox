@@ -177,3 +177,37 @@ describe('MTM + 669 parsers', () => {
     for (const [file, fmt] of files) expect(song(file).format).toBe(fmt)
   })
 })
+
+describe('MIDI parser', () => {
+  const midi = (file: string, target?: 'gm' | 'mt32') => {
+    const s = parseFile(load(file), target ? { midiTarget: target } : undefined)
+    if (s.kind !== 'midi') throw new Error('not midi')
+    return s
+  }
+  it('99WAYS track names, override target', () => {
+    const s = midi('midi/99WAYS.MID')
+    for (const n of ['Guitar 1', 'Guitar 2', 'Bass', 'Fill Guitar']) expect(s.message).toContain(n)
+    expect(s.target).toBe('gm')
+    const overrides: unknown = JSON.parse(readFileSync('scripts/midi-overrides.json', 'utf8'))
+    expect(overrides).toMatchObject({ 'midi/99ways.mid': 'mt32' })
+    expect(midi('midi/99WAYS.MID', 'mt32').target).toBe('mt32')
+  })
+  it('JAZZVIBE', () => {
+    const s = midi('midi/JAZZVIBE.MID')
+    expect(s.ticksPerBeat).toBe(480)
+    expect(s.tempoMap[0]?.tick).toBe(0)
+  })
+  it('all 7 MIDI files parse with sorted events', () => {
+    for (const f of FILES.midi) {
+      const s = midi(f)
+      expect(s.channelsUsed.length).toBeGreaterThan(0)
+      expect(s.events.every((e, i) => i === 0 || (s.events[i - 1]?.tick ?? 0) <= e.tick)).toBe(true)
+    }
+  })
+  it('rejects SMF format 2 and SMPTE', () => {
+    const hdr = (fmt: number, div: number) =>
+      new Uint8Array([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, fmt, 0, 0, div >> 8, div & 255])
+    expect(() => parseFile(hdr(2, 96))).toThrow('SMF format 2')
+    expect(() => parseFile(hdr(1, 0xe728))).toThrow('SMPTE timing')
+  })
+})

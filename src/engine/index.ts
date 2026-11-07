@@ -2,6 +2,7 @@ import type { MidiSong, ParsedFile, Song, SoundBank } from '../formats'
 import { NOTE_NONE } from '../formats'
 import { createChannel, runTick, startRow } from './effects'
 import { FORMAT_GAIN, finishMix, mixVoice, skipVoice } from './mixer'
+import { ticksToSeconds } from './midi-synth'
 import { periodToHz } from './pitch'
 import { createSequencer } from './sequencer'
 
@@ -260,7 +261,13 @@ export function computeLength(
   song: ParsedFile,
   maxSeconds = 1800,
 ): { seconds: number; loops: boolean; capped: boolean } {
-  if (song.kind === 'midi') throw new Error('Not implemented (P23)')
+  if (song.kind === 'midi') {
+    const last = song.events[song.events.length - 1]
+    const seconds = ticksToSeconds(song, last?.tick ?? 0) + 1
+    return seconds >= maxSeconds
+      ? { seconds: maxSeconds, loops: false, capped: true }
+      : { seconds, loops: false, capped: false }
+  }
   const seq = createSequencer(song)
   let seconds = 0
   // One tick lasts 2.5 / tempo seconds (decision 13).

@@ -1,5 +1,6 @@
 import { UnsupportedFormatError } from './bytes'
 import { parse669 } from './669'
+import { parseMidi } from './midi'
 import { parseMod } from './mod'
 import { parseMtm } from './mtm'
 import { parseS3m } from './s3m'
@@ -33,7 +34,7 @@ export function detectFormat(bytes: Uint8Array): Format | null {
 }
 
 /** Throws ParseError | UnsupportedFormatError. Never returns partial data. */
-export function parseFile(bytes: Uint8Array, _opts?: { midiTarget?: MidiTarget }): ParsedFile {
+export function parseFile(bytes: Uint8Array, opts?: { midiTarget?: MidiTarget }): ParsedFile {
   const format = detectFormat(bytes)
   if (format === null) throw new UnsupportedFormatError('unknown format')
   if (format === 'mod') return parseMod(bytes)
@@ -41,7 +42,7 @@ export function parseFile(bytes: Uint8Array, _opts?: { midiTarget?: MidiTarget }
   if (format === 's3m') return parseS3m(bytes)
   if (format === '669') return parse669(bytes)
   if (format === 'mtm') return parseMtm(bytes)
-  throw new UnsupportedFormatError(format) // midi lands in P23
+  return parseMidi(bytes, opts?.midiTarget ?? 'gm')
 }
 
 /** Throws ParseError. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Fx, NOTE_NONE } from '../formats'
-import type { Cell, Pattern, Song } from '../formats'
+import type { Cell, MidiSong, Pattern, Song } from '../formats'
 import { computeLength, createTrackerPlayer } from './index'
 import { createChannel, runTick, startRow } from './effects'
 import { createVoice, mixVoice } from './mixer'
@@ -272,5 +272,26 @@ describe('tracker player', () => {
     player.seek({ order: 2 })
     expect(player.ended).toBe(false)
     expect(player.snapshot().pos).toMatchObject({ order: 2, row: 0 })
+  })
+})
+
+describe('MIDI length', () => {
+  it('walks the tempo map and adds 1 s', () => {
+    const song: MidiSong = {
+      kind: 'midi',
+      format: 'midi',
+      title: '',
+      tracker: '',
+      message: '',
+      ticksPerBeat: 480,
+      tempoMap: [
+        { tick: 0, usPerBeat: 500000 },
+        { tick: 480, usPerBeat: 1000000 },
+      ],
+      events: [{ tick: 960, ch: 0, type: 'noteOff', key: 60 }],
+      channelsUsed: [],
+      target: 'gm',
+    }
+    expect(computeLength(song).seconds).toBeCloseTo(0.5 + 1 + 1)
   })
 })
