@@ -245,3 +245,37 @@
     display: table-cell;
   }
 }
+.connect {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  gap: var(--space-3);
+  text-align: center;
+  background: rgb(0 0 0 / 85%);
+  color: var(--hi);
+  cursor: pointer;
+}
+.npHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+.npViz {
+  height: calc(100vh - 360px);
+  min-height: 200px;
+  background: var(--well-bg);
+  border: var(--well-border-width) solid var(--well-border-color);
+}
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.stripCh {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}

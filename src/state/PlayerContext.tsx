@@ -29,6 +29,7 @@ export interface PlayerApi {
   ): Promise<void>
   toggle(): void
   setMuted(ch: number, muted: boolean): void
+  solo(ch: number | null): void // ch → mute all others; null → unmute all
   favorites: ReadonlySet<string>
   toggleFavorite(id: string): void // local ids are ignored
   /** Rejects with Error('File too large (max 16 MB)') | Error('Not a supported music file') | the parse error. Never uploads. */
@@ -129,6 +130,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     setMuted(ch, muted) {
       const next = muted ? muteMask | (1 << ch) : muteMask & ~(1 << ch)
+      setMuteMask(next)
+      engine.setOptions({ muteMask: next })
+    },
+    solo(ch) {
+      const song = engine.current?.song
+      const n = song?.kind === 'tracker' ? song.channels : 16
+      const next = ch === null ? 0 : ((1 << n) - 1) & ~(1 << ch)
       setMuteMask(next)
       engine.setOptions({ muteMask: next })
     },
