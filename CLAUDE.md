@@ -12,6 +12,24 @@ A static site that plays 90s BBS tracker music (MOD, S3M, STM, 669, MTM) and MID
 2. Work only on the current phase (P1–P28, in order). Don't start the next phase until the user says so.
 3. End the phase with the checkpoint report from `docs/PLAN.md`, including a suggested commit message `type(scope): message`. **The user makes every commit**: never run `git add`, `commit`, `push` or `branch`.
 
+## After each phase
+
+Once a phase's checkpoint report is done, overwrite `prompt.md` (repo root, gitignored) with the kick-off prompt for the **next** phase. Use this template, filling in N and the phase name from `docs/PLAN.md`:
+
+```
+Read CLAUDE.md and docs/PLAN.md. We are starting Phase N: <phase name>.
+Phases 1 to N-1 are complete and committed. Check git log and the current code to confirm the state matches the plan before changing anything.
+
+Implement Phase N only. Follow the ground rules. Do not modify code belonging to other phases unless the plan says to.
+
+When done:
+1. Run the build, lint, format and test commands from CLAUDE.md
+2. Run the Phase N acceptance check
+3. Report: what you changed (files), check results, and any deviations from the plan or open questions
+
+If anything in the plan is ambiguous or wrong, stop and report rather than improvising.
+```
+
 ## Runtime
 
 - Node **24.x**. Check that `node --version` starts with `v24`.

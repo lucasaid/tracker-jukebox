@@ -6,3 +6,4 @@ public/soundfonts
 .DS_Store
 *.wav
 *.tsbuildinfo
+prompt.md
