@@ -1,5 +1,6 @@
-// Bottom transport bar (decision 34). PREV/NEXT arrive with the jukebox in P21.
+// Bottom transport bar (decision 34).
 import { useEffect, useState } from 'react'
+import { sortEntries } from '../../library/search'
 import { formatRoute, parseRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
@@ -40,13 +41,26 @@ export function PlayerBar() {
     setSec(dragSec)
     setDragSec(null)
   }
+  /** Plays `id` and keeps an open play page on it. */
+  const playAndFollow = (id: string) => {
+    void play(id)
+    if (parseRoute(location.hash).page === 'play')
+      location.hash = formatRoute({ page: 'play', id, seek: null })
+  }
   const playRandom = () => {
     const pool = entries.filter((e) => e.id !== current?.id)
     const pick = pool[Math.floor(Math.random() * pool.length)]
-    if (!pick) return
-    void play(pick.id)
-    if (parseRoute(location.hash).page === 'play')
-      location.hash = formatRoute({ page: 'play', id: pick.id, seek: null })
+    if (pick) playAndFollow(pick.id)
+  }
+  /** Jukebox: the queue. Otherwise the whole library by title (same order as the jukebox), wrapping.
+   *  ponytail: ignores the Browse page's sort/filter, which is local to that page; follow it once
+   *  sort/filter move into settings or the URL (TODO). */
+  const step = (dir: 1 | -1) => {
+    if (mode === 'jukebox') return void (dir === 1 ? next() : prev())
+    const ids = sortEntries(entries, 'title', 'asc').map((e) => e.id)
+    const i = current ? ids.indexOf(current.id) : -1
+    const id = ids[(i + dir + ids.length) % ids.length]
+    if (id) playAndFollow(id)
   }
   const total = current ? (current.loops ? '--:--' : formatTime(current.durationSec)) : '--:--'
   return (
@@ -58,8 +72,8 @@ export function PlayerBar() {
       >
         {status === 'playing' ? '❚❚' : '▶'}
       </button>
-      {mode === 'jukebox' && (
-        <button className={styles.btn} aria-label="Previous song" onClick={() => void prev()}>
+      {entries.length > 1 && (
+        <button className={styles.btn} aria-label="Previous song" onClick={() => step(-1)}>
           PREV
         </button>
       )}
@@ -90,8 +104,8 @@ export function PlayerBar() {
           onBlur={commitSeek}
         />
       )}
-      {mode === 'jukebox' && (
-        <button className={styles.btn} aria-label="Next song" onClick={() => void next()}>
+      {entries.length > 1 && (
+        <button className={styles.btn} aria-label="Next song" onClick={() => step(1)}>
           NEXT
         </button>
       )}
