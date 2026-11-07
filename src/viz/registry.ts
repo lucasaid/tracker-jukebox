@@ -3,8 +3,10 @@ import config from '../../viz.config.json'
 import { bars } from './bars'
 import { channels } from './channels'
 import { copper, plasma, starfield } from './demo'
+import { oscilloscope } from './oscilloscope'
 import { pattern } from './pattern'
 import { scope } from './scope'
+import { spectrogram } from './spectrogram'
 import type { VisualizerDef } from './types'
 
 /** Every visualizer, in display order. */
@@ -13,6 +15,8 @@ export const all: readonly VisualizerDef[] = [
   scope,
   channels,
   bars,
+  oscilloscope,
+  spectrogram,
   plasma,
   starfield,
   copper,

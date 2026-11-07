@@ -4,6 +4,8 @@
     "scope": true,
     "channels": true,
     "bars": true,
+    "oscilloscope": true,
+    "spectrogram": true,
     "plasma": true,
     "starfield": true,
     "copper": true
