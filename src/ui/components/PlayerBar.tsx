@@ -10,6 +10,18 @@ import styles from '../ui.module.css'
 export const formatTime = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
+/** Text label on wide screens, glyph on phones (CSS swaps them; the button's aria-label names it). */
+function Label(props: { text: string; icon: string }) {
+  return (
+    <>
+      <span className={styles.barLabel}>{props.text}</span>
+      <span className={styles.barIcon} aria-hidden="true">
+        {props.icon}
+      </span>
+    </>
+  )
+}
+
 export function PlayerBar() {
   const {
     engine,
@@ -87,7 +99,7 @@ export function PlayerBar() {
       </button>
       {entries.length > 1 && (
         <button className={styles.btn} aria-label="Previous song" onClick={() => step(-1)}>
-          PREV
+          <Label text="PREV" icon="◄◄" />
         </button>
       )}
       {bank && (
@@ -129,17 +141,21 @@ export function PlayerBar() {
       )}
       {entries.length > 1 && (
         <button className={styles.btn} aria-label="Next song" onClick={() => step(1)}>
-          NEXT
+          <Label text="NEXT" icon="►►" />
         </button>
       )}
       {entries.length > 1 && (
         <button className={styles.btn} aria-label="Play a random song" onClick={playRandom}>
-          RANDOM
+          <Label text="RANDOM" icon="⇄" />
         </button>
       )}
       {current && (
-        <a href={formatRoute({ page: 'play', id: current.id, seek: null })} className={styles.btn}>
-          VIEW
+        <a
+          href={formatRoute({ page: 'play', id: current.id, seek: null })}
+          className={styles.btn}
+          aria-label="View song"
+        >
+          <Label text="VIEW" icon="≡" />
         </a>
       )}
       <button
@@ -147,7 +163,7 @@ export function PlayerBar() {
         aria-label={`Theme: ${settings.theme}, switch to ${nextTheme}`}
         onClick={() => update((s) => ({ ...s, theme: nextTheme }))}
       >
-        {settings.theme.toUpperCase()}
+        <Label text={settings.theme.toUpperCase()} icon="☼" />
       </button>
     </div>
   )

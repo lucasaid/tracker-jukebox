@@ -249,6 +249,48 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.barIcon {
+  display: none;
+}
+/* phone portrait: title row, seek row, then the buttons as icons spread across */
+@media (max-width: 599px) {
+  .bar {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  .bar .star {
+    order: -3;
+  }
+  .barTitle {
+    order: -2;
+    flex: 1 0 calc(100% - 2.5em); /* room for the star beside it, never a button */
+  }
+  .bar .seek,
+  .bar progress {
+    order: -1;
+    flex-basis: 100%;
+  }
+  .barLabel {
+    display: none;
+  }
+  .barIcon {
+    display: inline;
+  }
+  .bar .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 40px;
+    padding: 0 var(--space-2);
+    text-align: center;
+  }
+  .bar .btn::before,
+  .bar .btn::after {
+    content: none;
+  }
+}
 .toasts {
   position: fixed;
   left: var(--gutter);

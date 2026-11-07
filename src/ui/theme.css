@@ -23,6 +23,11 @@
   --gutter: 16px;
   --bar-height: 48px;
 }
+@media (max-width: 599px) {
+  :root {
+    --bar-height: 120px; /* PlayerBar wraps to title / seek / buttons rows */
+  }
+}
 
 /* ── bbs: ANSI board, 16-colour VGA palette, double-line frames ── */
 :root,
