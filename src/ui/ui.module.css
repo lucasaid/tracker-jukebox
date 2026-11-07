@@ -234,6 +234,8 @@
   color: var(--bar-fg);
   border-top: var(--bar-border);
   box-shadow: var(--bar-shadow);
+  z-index: 5; /* above the fullscreen visualizer */
+  transition: opacity 0.4s;
 }
 .seek {
   flex: 2;
@@ -302,6 +304,7 @@
   gap: var(--space-1) var(--space-4);
 }
 .npViz {
+  position: relative;
   height: calc(100vh - 360px);
   min-height: 200px;
   background: var(--well-bg);
@@ -405,4 +408,32 @@
   list-style: none;
   max-height: 40vh;
   overflow: auto;
+}
+
+/* VizFrame fullscreen: the well covers the window under the player bar */
+.vizFull {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  height: auto;
+  min-height: 0;
+  margin: 0 !important; /* beats .panel > * + * spacing, which left a gap showing the header */
+  border: 0;
+}
+.fullBtns {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+  transition: opacity 0.4s;
+}
+/* set by VizFrame after a few idle seconds in fullscreen */
+:global(html[data-idle]) {
+  cursor: none;
+}
+:global(html[data-idle]) .bar,
+:global(html[data-idle]) .fullBtns {
+  opacity: 0;
+  pointer-events: none;
 }

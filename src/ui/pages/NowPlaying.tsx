@@ -14,6 +14,7 @@ import { InfoPanel } from '../components/InfoPanel'
 import { MessageScroller } from '../components/MessageScroller'
 import { SampleBrowser } from '../components/SampleBrowser'
 import { showToast } from '../components/Toast'
+import { VizFrame } from '../components/VizFrame'
 import { VizPicker } from '../components/VizPicker'
 import styles from '../ui.module.css'
 
@@ -113,14 +114,14 @@ export function NowPlaying({ id }: { id: string }) {
         {preview.error && <p className={styles.error}>{preview.error}</p>}
         {shown === 'viz' && (
           <>
-            <div className={styles.npViz}>
+            <VizFrame>
               <VisualizerHost
                 vizId={settings.player.lastViz}
                 engine={engine}
                 label="Visualizer"
                 preview={playing ? undefined : preview.song}
               />
-            </div>
+            </VizFrame>
             <VizPicker />
             {playing && <ChannelStrip />}
           </>

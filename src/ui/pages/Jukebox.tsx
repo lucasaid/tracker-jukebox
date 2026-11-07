@@ -5,9 +5,10 @@ import type { Format } from '../../formats'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import type { Settings } from '../../state/settings'
-import { VisualizerHost, visualizers } from '../../viz'
+import { VisualizerHost } from '../../viz'
 import { DropZone } from '../components/DropZone'
 import { showToast } from '../components/Toast'
+import { nextViz, VizFrame } from '../components/VizFrame'
 import { VizPicker } from '../components/VizPicker'
 import styles from '../ui.module.css'
 
@@ -136,19 +137,13 @@ export function Jukebox() {
             </select>
           </label>
         </p>
-        <div className={styles.npViz}>
+        <VizFrame>
           <VisualizerHost vizId={settings.player.lastViz} engine={engine} label="Visualizer" />
-        </div>
+        </VizFrame>
         <VizPicker />
       </section>
     </>
   )
-}
-
-function nextViz(s: Settings): Settings {
-  const i = visualizers.findIndex((v) => v.id === s.player.lastViz)
-  const next = visualizers[(i + 1) % visualizers.length]
-  return next ? { ...s, player: { ...s.player, lastViz: next.id } } : s
 }
 
 function Toggle(props: { on: boolean; onClick: () => void; children: string }) {
