@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 
 /** 16-bit PCM, clamped to ±1. */
 export function writeWav(
@@ -35,6 +35,40 @@ export function writeWav(
 }
 
 /** 16-bit PCM or 32-bit float; anything else throws Error('Unsupported WAV'). */
-export function readWav(_path: string): { sampleRate: number; channels: Float32Array[] } {
-  throw new Error('Not implemented (P10)')
+export function readWav(path: string): { sampleRate: number; channels: Float32Array[] } {
+  const buf = readFileSync(path)
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  const tag = (at: number): string => buf.toString('latin1', at, at + 4)
+  if (buf.length < 12 || tag(0) !== 'RIFF' || tag(8) !== 'WAVE') throw new Error('Unsupported WAV')
+  let fmt: { code: number; ch: number; rate: number; bits: number } | undefined
+  for (let at = 12; at + 8 <= buf.length;) {
+    const size = view.getUint32(at + 4, true)
+    const body = at + 8
+    if (tag(at) === 'fmt ') {
+      let code = view.getUint16(body, true)
+      if (code === 0xfffe) code = view.getUint16(body + 24, true) // WAVE_FORMAT_EXTENSIBLE sub-format
+      fmt = {
+        code,
+        ch: view.getUint16(body + 2, true),
+        rate: view.getUint32(body + 4, true),
+        bits: view.getUint16(body + 14, true),
+      }
+    } else if (tag(at) === 'data') {
+      const ok = fmt && ((fmt.code === 1 && fmt.bits === 16) || (fmt.code === 3 && fmt.bits === 32))
+      if (!fmt || !ok || fmt.ch < 1) throw new Error('Unsupported WAV')
+      const bytes = fmt.bits / 8
+      const end = Math.min(body + size, buf.length) // tolerate a streamed/truncated size field
+      const frames = Math.floor((end - body) / (bytes * fmt.ch))
+      const channels = Array.from({ length: fmt.ch }, () => new Float32Array(frames))
+      for (let f = 0; f < frames; f++)
+        for (let c = 0; c < fmt.ch; c++) {
+          const o = body + (f * fmt.ch + c) * bytes
+          ;(channels[c] as Float32Array)[f] =
+            fmt.bits === 16 ? view.getInt16(o, true) / 32768 : view.getFloat32(o, true)
+        }
+      return { sampleRate: fmt.rate, channels }
+    }
+    at = body + size + (size & 1)
+  }
+  throw new Error('Unsupported WAV')
 }

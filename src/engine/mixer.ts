@@ -5,11 +5,11 @@ import type { Interpolation } from './index'
 /** Set once per format from the P10–P12 comparisons (decision 17).
  *  ponytail: mod/mtm are a provisional 0.8 (P9 peaks hit 0 dBFS at 1), P10 replaces them. */
 export const FORMAT_GAIN: Record<TrackerFormat, number> = {
-  mod: 0.8,
+  mod: 0.74,
   stm: 1,
   s3m: 1,
   '669': 1,
-  mtm: 0.8,
+  mtm: 0.88,
 }
 
 export interface Voice {
