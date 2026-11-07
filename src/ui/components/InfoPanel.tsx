@@ -7,10 +7,32 @@ import { formatTime } from './PlayerBar'
 
 /** `details` = false leaves out the message and sample names, for NowPlaying where tabs show them. */
 export function InfoPanel({ entry, details = true }: { entry: ManifestEntry; details?: boolean }) {
-  const { play, favorites, toggleFavorite } = usePlayer()
+  const { engine, status, play, favorites, toggleFavorite } = usePlayer()
   const local = entry.id.startsWith('local:')
-  // Seeded from the manifest's detected target; changing it replays with the other mapping.
-  const [mt32, setMt32] = useState(entry.midiTarget === 'mt32')
+  // The loaded song's mapping if this song is loaded, else the manifest's detected target.
+  const [mt32, setMt32] = useState(() => {
+    const loaded = engine.current
+    return loaded?.id === entry.id && loaded.song.kind === 'midi'
+      ? loaded.song.target === 'mt32'
+      : entry.midiTarget === 'mt32'
+  })
+
+  /** Switches the mapping. A loaded song is reloaded in place, at the same position and
+   *  play/pause state; otherwise the choice applies when PLAY is pressed. */
+  const toggleMt32 = (): void => {
+    const next = !mt32
+    setMt32(next)
+    const loaded = engine.current
+    if (loaded?.id !== entry.id || loaded.song.kind !== 'midi') return
+    const seconds = engine.latest()?.snap.seconds ?? 0
+    engine
+      .load(
+        { id: entry.id, parsed: { ...loaded.song, target: next ? 'mt32' : 'gm' } },
+        { seek: { seconds }, autoplay: status === 'playing' },
+      )
+      // The engine has already reported the failure (toast); the button goes back to match.
+      .catch(() => setMt32(!next))
+  }
   return (
     <section className={styles.panel} aria-label={`Info: ${entry.title}`}>
       <h2 className={styles.heading}>{entry.title.toUpperCase()}</h2>
@@ -30,14 +52,7 @@ export function InfoPanel({ entry, details = true }: { entry: ManifestEntry; det
         </button>{' '}
         {entry.midiTarget && (
           <>
-            <button
-              className={styles.btn}
-              aria-pressed={mt32}
-              onClick={() => {
-                setMt32(!mt32)
-                void play(entry.id, { midiTarget: mt32 ? 'gm' : 'mt32' })
-              }}
-            >
+            <button className={styles.btn} aria-pressed={mt32} onClick={toggleMt32}>
               {mt32 ? '☑ MT-32 MODE' : '☐ MT-32 MODE'}
             </button>{' '}
           </>
