@@ -1,0 +1,6 @@
+trackers
+public/music
+public/manifest.json
+public/soundfonts
+dist
+pnpm-lock.yaml

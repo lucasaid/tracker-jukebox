@@ -1,0 +1,8 @@
+node_modules
+dist
+public/music
+public/manifest.json
+public/soundfonts
+.DS_Store
+*.wav
+*.tsbuildinfo
