@@ -21,6 +21,12 @@ export function Credits() {
           int10h.org
         </a>
       </p>
+      <p>
+        MIDI sound bank: GeneralUser GS by S. Christian Collins —{' '}
+        <a href="https://www.schristiancollins.com" target="_blank" rel="noreferrer">
+          schristiancollins.com
+        </a>
+      </p>
       <h3 className={styles.subheading}>Music</h3>
       {songs.length === 0 && <p className={styles.note}>Loading…</p>}
       <ul className={styles.credits}>

@@ -1,5 +1,11 @@
-import { parseFile } from '../formats'
-import type { MidiTarget, ParseError, ParsedFile, UnsupportedFormatError } from '../formats'
+import { parseFile, parseSoundBank } from '../formats'
+import type {
+  MidiTarget,
+  ParseError,
+  ParsedFile,
+  SoundBank,
+  UnsupportedFormatError,
+} from '../formats'
 import { DEFAULT_PLAYER_OPTIONS, computeLength } from '../engine'
 import type { PlayerOptions, PlayerStats, SeekTarget, Snapshot } from '../engine'
 import { fetchBytes } from '../net'
@@ -51,6 +57,7 @@ interface Deck {
   loaded: Loaded | null
   snapshots: Stamped[]
   lastPick: Stamped | null
+  hasBank: boolean
   waiting: { id: string; ok: () => void; fail: (e: Error) => void } | null
 }
 
@@ -69,9 +76,13 @@ export class AudioEngine {
   private listeners = new Set<(e: EngineEvent) => void>()
   private fadeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly debug: boolean
+  private readonly soundFontUrl: string
+  /** fetched once per session; cleared on failure so the next MIDI play retries */
+  private bank: Promise<SoundBank> | null = null
 
   constructor(opts?: { debug?: boolean; soundFontUrl?: string }) {
     this.debug = opts?.debug ?? false
+    this.soundFontUrl = opts?.soundFontUrl ?? './soundfonts/GeneralUser-GS.sf2'
   }
 
   static isSupported(): boolean {
@@ -145,6 +156,7 @@ export class AudioEngine {
         loaded: null,
         snapshots: [],
         lastPick: null,
+        hasBank: false,
         waiting: null,
       }
       node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorklet(deck, e.data)
@@ -187,6 +199,37 @@ export class AudioEngine {
     }
   }
 
+  /** Fetches and parses the SoundFont on first use (not tied to any load's abort signal, so a
+   *  newer load never throws the download away), then hands it to each deck once. */
+  private async ensureBank(songId: string): Promise<void> {
+    this.bank ??= fetchBytes(this.soundFontUrl, {
+      onProgress: (loaded, total) => this.emit({ type: 'bankProgress', loaded, total }),
+    })
+      .then((bytes) => {
+        const bank = parseSoundBank(bytes)
+        this.emit({ type: 'bankProgress', loaded: bytes.length, total: bytes.length })
+        return bank
+      })
+      .catch((err: unknown) => {
+        this.bank = null
+        throw err
+      })
+    let bank: SoundBank
+    try {
+      bank = await this.bank
+    } catch (err) {
+      throw new PlaybackError(
+        `Sound bank unavailable: ${err instanceof Error ? err.message : 'unknown error'}`,
+        songId,
+      )
+    }
+    for (const d of this.decks)
+      if (!d.hasBank) {
+        d.hasBank = true
+        this.send(d, { type: 'bank', bank })
+      }
+  }
+
   /** Ends a crossfade early: the deck that was fading out is silenced and emptied. */
   private settleFade(): void {
     if (this.fadeTimer !== null) clearTimeout(this.fadeTimer)
@@ -222,7 +265,10 @@ export class AudioEngine {
         if (stale()) throw abortError()
         song = parseFile(bytes, opts?.midiTarget ? { midiTarget: opts.midiTarget } : undefined)
       }
-      if (song.kind === 'midi') throw new PlaybackError('MIDI playback not available yet', src.id)
+      if (song.kind === 'midi') {
+        await this.ensureBank(src.id)
+        if (stale()) throw abortError()
+      }
       const durationSec = computeLength(song).seconds
 
       // Crossfade onto the idle deck only while something is actually audible.

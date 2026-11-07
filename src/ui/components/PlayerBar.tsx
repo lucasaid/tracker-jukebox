@@ -13,6 +13,19 @@ export function PlayerBar() {
   const { engine, status, current, toggle, mode, prev, next } = usePlayer()
   const { settings, update } = useSettings()
   const [sec, setSec] = useState(0)
+  const [bank, setBank] = useState<{ loaded: number; total: number | null } | null>(null)
+
+  useEffect(
+    () =>
+      engine.on((e) => {
+        if (e.type === 'bankProgress')
+          setBank(
+            e.total !== null && e.loaded >= e.total ? null : { loaded: e.loaded, total: e.total },
+          )
+        else if (e.type === 'status' && e.status !== 'loading') setBank(null)
+      }),
+    [engine],
+  )
 
   useEffect(() => {
     const timer = setInterval(() => setSec(engine.latest()?.snap.seconds ?? 0), 250)
@@ -34,6 +47,13 @@ export function PlayerBar() {
         <button className={styles.btn} aria-label="Previous song" onClick={() => void prev()}>
           PREV
         </button>
+      )}
+      {bank && (
+        <progress
+          aria-label="Loading sound bank"
+          max={bank.total ?? undefined}
+          value={bank.total === null ? undefined : bank.loaded}
+        />
       )}
       <span className={styles.barTitle}>
         {current ? current.title || current.file : 'Nothing playing'} ·{' '}

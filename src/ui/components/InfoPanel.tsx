@@ -1,4 +1,5 @@
-// Song metadata, message, samples. The MT-32 toggle for MIDI arrives in P26.
+// Song metadata, message, samples and, for MIDI, the MT-32 mode toggle.
+import { useState } from 'react'
 import { usePlayer } from '../../state/PlayerContext'
 import type { ManifestEntry } from '../../library/manifest'
 import styles from '../ui.module.css'
@@ -7,6 +8,8 @@ import { formatTime } from './PlayerBar'
 export function InfoPanel({ entry }: { entry: ManifestEntry }) {
   const { play, favorites, toggleFavorite } = usePlayer()
   const local = entry.id.startsWith('local:')
+  // Seeded from the manifest's detected target; changing it replays with the other mapping.
+  const [mt32, setMt32] = useState(entry.midiTarget === 'mt32')
   return (
     <section className={styles.panel} aria-label={`Info: ${entry.title}`}>
       <h2 className={styles.heading}>{entry.title.toUpperCase()}</h2>
@@ -16,9 +19,28 @@ export function InfoPanel({ entry }: { entry: ManifestEntry }) {
         {Math.ceil(entry.sizeBytes / 1024)} KB
       </p>
       <p>
-        <button className={styles.btn} onClick={() => void play(entry.id)}>
+        <button
+          className={styles.btn}
+          onClick={() =>
+            void play(entry.id, entry.midiTarget ? { midiTarget: mt32 ? 'mt32' : 'gm' } : undefined)
+          }
+        >
           PLAY
         </button>{' '}
+        {entry.midiTarget && (
+          <>
+            <button
+              className={styles.btn}
+              aria-pressed={mt32}
+              onClick={() => {
+                setMt32(!mt32)
+                void play(entry.id, { midiTarget: mt32 ? 'gm' : 'mt32' })
+              }}
+            >
+              {mt32 ? '☑ MT-32 MODE' : '☐ MT-32 MODE'}
+            </button>{' '}
+          </>
+        )}
         {!local && (
           <button
             className={styles.btn}

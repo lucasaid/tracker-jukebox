@@ -1,6 +1,7 @@
 // AudioWorkletGlobalScope entry. The DOM lib lacks the worklet scope, so it is declared here.
-import { createTrackerPlayer } from '../engine'
+import { createMidiPlayer, createTrackerPlayer } from '../engine'
 import type { Player } from '../engine'
+import type { SoundBank } from '../formats'
 import { PROCESSOR_NAME, SNAPSHOT_EVERY_FRAMES } from './protocol'
 import type { FromWorklet, ToWorklet } from './protocol'
 
@@ -17,6 +18,7 @@ declare const AudioWorkletProcessor: new () => AudioWorkletProcessorBase
 
 class TrackerProcessor extends AudioWorkletProcessor {
   private player: Player | null = null
+  private bank: SoundBank | null = null
   private id = ''
   private playing = false
   private endedSent = false
@@ -43,7 +45,8 @@ class TrackerProcessor extends AudioWorkletProcessor {
     try {
       switch (m.type) {
         case 'bank':
-          break // ponytail: SoundFonts arrive in P26
+          this.bank = m.bank
+          break
         case 'load':
           this.id = m.id
           this.playing = false
@@ -51,11 +54,13 @@ class TrackerProcessor extends AudioWorkletProcessor {
           this.sinceSnapshot = 0
           this.sinceStats = 0
           if (m.song.kind === 'midi') {
-            this.player = null
-            this.post({ type: 'error', id: m.id, message: 'MIDI playback not available yet' })
-            break
-          }
-          this.player = createTrackerPlayer(m.song, sampleRate, m.options)
+            if (!this.bank) {
+              this.player = null
+              this.post({ type: 'error', id: m.id, message: 'No sound bank loaded' })
+              break
+            }
+            this.player = createMidiPlayer(m.song, this.bank, sampleRate, m.options)
+          } else this.player = createTrackerPlayer(m.song, sampleRate, m.options)
           if (m.seek) this.player.seek(m.seek)
           this.post({ type: 'loaded', id: m.id })
           this.snapshot()

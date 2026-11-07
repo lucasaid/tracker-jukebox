@@ -6,6 +6,8 @@ import { createMidiSynth, ticksToSeconds } from './midi-synth'
 import { periodToHz } from './pitch'
 import { createSequencer } from './sequencer'
 
+export { ticksToSeconds } from './midi-synth'
+
 export type Interpolation = 'nearest' | 'linear' | 'cubic'
 
 export interface PlayerOptions {

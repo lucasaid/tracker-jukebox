@@ -1,5 +1,6 @@
-// Tracker pattern view (decision 27). The MIDI piano roll joins in P26.
-import type { Cell, Song } from '../formats'
+// Tracker pattern view (decision 27) and the MIDI piano roll (decision 28).
+import { ticksToSeconds } from '../engine'
+import type { Cell, MidiSong, Song } from '../formats'
 import type { Frame, VisualizerDef } from './types'
 
 const NOTES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-']
@@ -28,6 +29,82 @@ function effectText(cell: Cell, song: Song): string {
   return `${letter}${hex2(cell.paramRaw)}`
 }
 
+const ROLL_BEFORE_SEC = 2
+const ROLL_SPAN_SEC = 8
+const KEY_LO = 24
+const KEY_HI = 96
+
+interface RollNote {
+  ch: number
+  key: number
+  startSec: number
+  endSec: number
+}
+
+/** Pairs each noteOn with the next noteOff of the same channel and key (open notes end with the song). */
+function rollNotes(song: MidiSong): RollNote[] {
+  const open = new Map<number, number>()
+  const notes: RollNote[] = []
+  const close = (id: number, tick: number): void => {
+    const start = open.get(id)
+    if (start === undefined) return
+    open.delete(id)
+    notes.push({
+      ch: id >> 7,
+      key: id & 127,
+      startSec: ticksToSeconds(song, start),
+      endSec: ticksToSeconds(song, tick),
+    })
+  }
+  let lastTick = 0
+  for (const e of song.events) {
+    lastTick = e.tick
+    if (e.type === 'noteOn') {
+      close((e.ch << 7) | e.key, e.tick)
+      open.set((e.ch << 7) | e.key, e.tick)
+    } else if (e.type === 'noteOff') close((e.ch << 7) | e.key, e.tick)
+  }
+  for (const id of [...open.keys()]) close(id, lastTick)
+  return notes.sort((a, b) => a.startSec - b.startSec)
+}
+
+function drawRoll(
+  ctx: CanvasRenderingContext2D,
+  f: Frame,
+  song: MidiSong,
+  notes: RollNote[],
+): void {
+  const { width: w, height: h, palette: p, snap } = f
+  const lanes = song.channelsUsed
+  if (lanes.length === 0) return
+  const laneH = h / lanes.length
+  const now = snap.seconds
+  const from = now - ROLL_BEFORE_SEC
+  const xOf = (sec: number): number => ((sec - from) / ROLL_SPAN_SEC) * w
+  ctx.font = '10px monospace'
+  ctx.textBaseline = 'top'
+  lanes.forEach((ch, i) => {
+    const top = i * laneH
+    ctx.fillStyle = p.sep
+    ctx.fillRect(0, top, w, 1)
+    ctx.fillStyle = snap.ch[ch]?.active ? p.fg : p.dim
+    ctx.fillText(`CH${ch + 1}`, 2, top + 2)
+  })
+  for (const n of notes) {
+    if (n.startSec > from + ROLL_SPAN_SEC) break // sorted by start
+    if (n.endSec < from) continue
+    const lane = lanes.indexOf(n.ch)
+    if (lane < 0) continue
+    const key = Math.max(KEY_LO, Math.min(KEY_HI, n.key))
+    const y = lane * laneH + laneH * (1 - (key - KEY_LO) / (KEY_HI - KEY_LO + 1)) - 1
+    const x = xOf(n.startSec)
+    ctx.fillStyle = n.startSec <= now && n.endSec >= now ? p.accent : p.note
+    ctx.fillRect(x, y, Math.max(1, xOf(n.endSec) - x), Math.max(2, laneH / (KEY_HI - KEY_LO)))
+  }
+  ctx.fillStyle = p.accent
+  ctx.fillRect(xOf(now), 0, 1, h)
+}
+
 export const pattern: VisualizerDef = {
   id: 'pattern',
   name: 'Pattern',
@@ -35,6 +112,8 @@ export const pattern: VisualizerDef = {
     let page = 0
     let pages = 1
     let lit: number[] = []
+    let rollSong: MidiSong | null = null
+    let roll: RollNote[] = []
 
     const draw = (ctx: CanvasRenderingContext2D, f: Frame | null, dt: number): void => {
       const w = f?.width ?? ctx.canvas.clientWidth
@@ -42,6 +121,14 @@ export const pattern: VisualizerDef = {
       const p = f?.palette
       ctx.fillStyle = p?.bg ?? '#000'
       ctx.fillRect(0, 0, w, h)
+      if (f && p && f.song.kind === 'midi') {
+        if (rollSong !== f.song) {
+          rollSong = f.song
+          roll = rollNotes(f.song)
+        }
+        drawRoll(ctx, f, f.song, roll)
+        return
+      }
       if (!f || !p || f.song.kind !== 'tracker' || f.snap.pos.kind !== 'tracker') return
       const { song, snap } = f
       const pos = f.snap.pos
