@@ -208,6 +208,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [mode, engine])
 
+  // Media keys and lock-screen controls (optional API).
+  const currentEntry = entries.find((e) => e.id === currentId) ?? null
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    navigator.mediaSession.metadata = currentEntry
+      ? new MediaMetadata({
+          title: currentEntry.title || currentEntry.file,
+          artist: currentEntry.tracker,
+          album: 'Tracker Jukebox',
+        })
+      : null
+  }, [currentEntry])
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    ms.playbackState = status === 'playing' ? 'playing' : status === 'paused' ? 'paused' : 'none'
+    ms.setActionHandler('play', () => engine.play())
+    ms.setActionHandler('pause', () => engine.pause())
+    const step = (dir: 'next' | 'prev') => () => {
+      const q = queue.current
+      if (q) void live.current.playQueued(() => (dir === 'next' ? q.next() : q.prev()), 0)
+    }
+    ms.setActionHandler('nexttrack', mode === 'jukebox' ? step('next') : null)
+    ms.setActionHandler('previoustrack', mode === 'jukebox' ? step('prev') : null)
+  }, [engine, mode, status])
+
   const api: PlayerApi = {
     engine,
     status,

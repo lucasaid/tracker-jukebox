@@ -7,7 +7,7 @@ import { Browse } from './ui/pages/Browse'
 import { Credits } from './ui/pages/Credits'
 import { Jukebox } from './ui/pages/Jukebox'
 import { Landing } from './ui/pages/Landing'
-import { NowPlaying } from './ui/pages/NowPlaying'
+import { NowPlaying, openTab } from './ui/pages/NowPlaying'
 import { PlayerProvider, usePlayer } from './state/PlayerContext'
 import { useHashRoute } from './state/route'
 import { SettingsProvider, useSettings } from './state/SettingsContext'
@@ -77,6 +77,11 @@ function Shell() {
         go({ page: 'jukebox' })
       } else if (e.key === 'c' || e.key === 'C') {
         go({ page: 'credits' })
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (player.current) {
+          openTab('message')
+          go({ page: 'play', id: player.current.id, seek: null })
+        }
       } else if (e.key === 'n' || e.key === 'N') {
         void player.next()
       } else if (e.key === 'v' || e.key === 'V') {

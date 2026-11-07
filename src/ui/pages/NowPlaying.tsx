@@ -1,19 +1,46 @@
-// Full-screen view and share-link target. Only the VIZ tab exists until P27 adds MESSAGE and SAMPLES.
+// Full-screen view and share-link target, with VIZ / MESSAGE / SAMPLES tabs.
 import { useEffect, useState } from 'react'
 import { formatRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import { VisualizerHost } from '../../viz'
 import { ChannelStrip } from '../components/ChannelStrip'
+import { MessageScroller } from '../components/MessageScroller'
+import { SampleBrowser } from '../components/SampleBrowser'
 import { showToast } from '../components/Toast'
 import { VizPicker } from '../components/VizPicker'
 import styles from '../ui.module.css'
+
+type Tab = 'viz' | 'message' | 'samples'
+const TAB_EVENT = 'tj-open-tab'
+let pendingTab: Tab | null = null
+
+/** Asks NowPlaying to show `tab`: now if mounted, otherwise when it mounts. */
+export function openTab(tab: Tab): void {
+  pendingTab = tab
+  window.dispatchEvent(new Event(TAB_EVENT))
+}
+
+const takeTab = (): Tab | null => {
+  const t = pendingTab
+  pendingTab = null
+  return t
+}
 
 export function NowPlaying() {
   const { engine, current } = usePlayer()
   const { settings } = useSettings()
   const [where, setWhere] = useState('')
   const [link, setLink] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>(() => takeTab() ?? 'viz')
+  const isTracker = current?.format !== 'midi'
+  const shown: Tab = tab === 'samples' && !isTracker ? 'viz' : tab
+
+  useEffect(() => {
+    const onTab = (): void => setTab((t) => takeTab() ?? t)
+    window.addEventListener(TAB_EVENT, onTab)
+    return () => window.removeEventListener(TAB_EVENT, onTab)
+  }, [])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -55,11 +82,30 @@ export function NowPlaying() {
             : ''}
         </span>
       </div>
-      <div className={styles.npViz}>
-        <VisualizerHost vizId={settings.player.lastViz} engine={engine} label="Visualizer" />
+      <div className={styles.tabs} role="tablist" aria-label="View">
+        {(['viz', 'message', ...(isTracker ? ['samples'] : [])] as Tab[]).map((t) => (
+          <button
+            key={t}
+            role="tab"
+            aria-selected={t === shown}
+            className={`${styles.chip} ${t === shown ? styles.chipOn : ''}`}
+            onClick={() => setTab(t)}
+          >
+            {t === 'viz' ? 'VIZ' : t.toUpperCase()}
+          </button>
+        ))}
       </div>
-      <VizPicker />
-      <ChannelStrip />
+      {shown === 'viz' && (
+        <>
+          <div className={styles.npViz}>
+            <VisualizerHost vizId={settings.player.lastViz} engine={engine} label="Visualizer" />
+          </div>
+          <VizPicker />
+          <ChannelStrip />
+        </>
+      )}
+      {shown === 'message' && <MessageScroller />}
+      {shown === 'samples' && <SampleBrowser key={current?.id} />}
       <p>
         <button className={styles.btn} onClick={() => void share()} disabled={!current}>
           SHARE

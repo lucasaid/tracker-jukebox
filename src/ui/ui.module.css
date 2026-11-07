@@ -312,3 +312,55 @@
   display: grid;
   gap: var(--space-3);
 }
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.scroller {
+  --scroller-h: max(200px, calc(100vh - 360px));
+  height: var(--scroller-h);
+  overflow: hidden;
+  background: var(--well-bg);
+  border: var(--well-border-width) solid var(--well-border-color);
+}
+.scrollerText {
+  margin: 0;
+  padding: var(--scroller-h) var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+  animation: scrollUp linear infinite;
+}
+@keyframes scrollUp {
+  to {
+    transform: translateY(-100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroller {
+    overflow: auto;
+  }
+  .scrollerText {
+    padding: var(--space-3);
+    animation: none;
+  }
+}
+.wave {
+  display: block;
+  width: 100%;
+  height: 96px;
+  color: var(--accent);
+  background: var(--well-bg);
+  border: var(--well-border-width) solid var(--well-border-color);
+}
+.sampleList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: var(--space-2) 0;
+  padding: 0;
+  list-style: none;
+  max-height: 40vh;
+  overflow: auto;
+}
