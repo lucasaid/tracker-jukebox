@@ -34,8 +34,8 @@ A static website that plays 90s BBS music: tracker modules (MOD, S3M, STM, 669, 
 | `←` / `→`       | Previous / next order (MIDI: ∓10 s) |
 | `1`–`9`         | Mute / unmute channel               |
 | `Shift`+`1`–`9` | Solo channel (`Shift`+`0` clears)   |
-| `N`             | Next song                           |
-| `V`             | Next visualizer                     |
+| `N`             | Next song (`Shift`: previous)       |
+| `V`             | Next visualizer (`Shift`: previous) |
 | `T`             | Next theme                          |
 | `M`             | Show the current song's message     |
 | `B` / `J` / `C` | Go to Browse / Jukebox / Credits    |

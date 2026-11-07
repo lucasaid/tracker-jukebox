@@ -90,10 +90,11 @@ function Shell() {
           go({ page: 'play', id: player.current.id, seek: null })
         }
       } else if (e.key === 'n' || e.key === 'N') {
-        void player.next()
+        void (e.shiftKey ? player.prev() : player.next())
       } else if (e.key === 'v' || e.key === 'V') {
         const i = visualizers.findIndex((v) => v.id === settings.player.lastViz)
-        const next = visualizers[(i + 1) % visualizers.length]
+        const d = e.shiftKey ? visualizers.length - 1 : 1
+        const next = visualizers[(i + d) % visualizers.length]
         if (next) update((s) => ({ ...s, player: { ...s.player, lastViz: next.id } }))
       } else if (e.key === 't' || e.key === 'T') {
         const next = THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length]
