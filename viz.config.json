@@ -8,6 +8,7 @@
     "spectrogram": true,
     "terrain": true,
     "vu": true,
+    "warp": true,
     "plasma": true,
     "starfield": true,
     "copper": true

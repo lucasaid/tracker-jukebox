@@ -10,7 +10,7 @@ interface Drive {
 }
 
 /** Shared audio drive: intensity from the mix RMS, a pulse that decays after any channel trigger. */
-function createDrive(): (f: Frame, dt: number) => Drive {
+export function createDrive(): (f: Frame, dt: number) => Drive {
   const d: Drive = { intensity: 0, pulse: 0 }
   return (f, dt) => {
     let sum = 0
@@ -23,7 +23,7 @@ function createDrive(): (f: Frame, dt: number) => Drive {
 }
 
 /** With reducedMotion a visualizer draws once per canvas size and then stops. */
-function createStill(): (f: Frame) => boolean {
+export function createStill(): (f: Frame) => boolean {
   let key = ''
   return (f) => {
     if (!f.reducedMotion) return false
@@ -34,7 +34,7 @@ function createStill(): (f: Frame) => boolean {
   }
 }
 
-const idle = (ctx: CanvasRenderingContext2D, f: Frame | null): void => {
+export const idle = (ctx: CanvasRenderingContext2D, f: Frame | null): void => {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, f?.width ?? ctx.canvas.clientWidth, f?.height ?? ctx.canvas.clientHeight)
 }
