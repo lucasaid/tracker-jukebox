@@ -157,8 +157,9 @@ const stats = { unknownFx: 0, voices: 0 }
 
 describe('pitch', () => {
   it('C-4 at c2spd 8363 is period 428, about 8287 Hz', () => {
-    expect(periodOf(48, 8363)).toBe(428)
-    expect(Math.abs(periodToHz(428) - 8287)).toBeLessThan(1)
+    expect(periodOf(48, 8363, 'mod')).toBe(428)
+    expect(Math.abs(periodToHz(428, 'mod') - 8287)).toBeLessThan(1)
+    expect(Math.abs(periodToHz(periodOf(48, 8363, 's3m'), 's3m') - 8363)).toBeLessThan(1)
   })
 })
 
@@ -218,7 +219,7 @@ describe('effects', () => {
     startRow(ch, withCell({ note: 60, fx: Fx.TonePorta, param: 255 }), song, stats)
     expect(ch.period).toBe(428)
     runTick(ch, withCell({ fx: Fx.TonePorta }), 1, song)
-    expect(ch.period).toBe(periodOf(60, 8363))
+    expect(ch.period).toBe(periodOf(60, 8363, 'mod'))
   })
 })
 

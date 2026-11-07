@@ -1195,6 +1195,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
     - Mix: `Σ / sqrt(channels) · mixGain · FORMAT_GAIN[format]`, hard-clamped to ±1.
     - `FORMAT_GAIN` starts at 1 for every format. P10 (MOD/MTM), P11 (STM/669) and P12 (S3M) each set their formats' value once, to the value that makes the mean ΔdB of that format's compare rows closest to 0. The value is recorded in docs/PLAN.md. P9 sets `mod` and `mtm` to a provisional 0.8 (at 1 the 90210 render peaked at 0 dBFS); P10 replaces it.
     - **P10 result:** `mod` 0.74 (mean ΔdB +0.66 at 0.8 over 5 files), `mtm` 0.88 (mean ΔdB −0.80 at 0.8 over 7 files; MTM effects are still incomplete until P11, so recheck then).
+    - **P11 result:** `stm` 0.54 (ΔdB +0.1 on KTULHU), `669` 1 (mean ΔdB +0.21 over 8 files), `mtm` 0.88 kept (mean ΔdB −0.12 over 7 files).
 18. **End and loops:**
     - Playback ends at the end of the order list, or when the sequencer reaches an (order, row) it has already played in this run because of a jump, break or end-of-list wrap. In the second case `loops = true`.
     - Pattern-loop (E6/SB) repeats are not counted as loops.

@@ -3,10 +3,10 @@ import type { TrackerFormat } from '../formats'
 import type { Interpolation } from './index'
 
 /** Set once per format from the P10–P12 comparisons (decision 17).
- *  ponytail: mod/mtm are a provisional 0.8 (P9 peaks hit 0 dBFS at 1), P10 replaces them. */
+ *  P10: mod, mtm; P11: stm, 669 (669 stays 1, mean dB delta +0.21). */
 export const FORMAT_GAIN: Record<TrackerFormat, number> = {
   mod: 0.74,
-  stm: 1,
+  stm: 0.54,
   s3m: 1,
   '669': 1,
   mtm: 0.88,

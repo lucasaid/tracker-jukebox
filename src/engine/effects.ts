@@ -1,11 +1,11 @@
 // Per-tick effect handlers with per-format quirks (decision 9).
-// ponytail: only the MOD/MTM effect set so far; P11/P12 add the STM/669/S3M quirks.
+// ponytail: MOD/MTM/STM/669 effect set; P12 adds the S3M quirks.
 import { Fx, NOTE_NONE } from '../formats'
 import type { Cell, Song } from '../formats'
 import { createVoice } from './mixer'
 import type { Voice } from './mixer'
 import type { PlayerStats } from './index'
-import { clampPeriod, periodOf } from './pitch'
+import { clampPeriod, periodOf, periodUnit } from './pitch'
 
 export interface Channel {
   voice: Voice
@@ -84,7 +84,7 @@ function trigger(ch: Channel, song: Song, note: number, offsetParam: number): vo
   const v = ch.voice
   ch.note = note
   ch.triggered = true
-  ch.period = periodOf(note, ch.c2spd)
+  ch.period = periodOf(note, ch.c2spd, song.format)
   v.data = smp.data
   v.loopStart = smp.loopStart
   v.loopEnd = smp.loopEnd
@@ -106,14 +106,16 @@ export function startRow(ch: Channel, cell: Cell, song: Song, stats: PlayerStats
     ch.c2spd = smp.c2spd
     ch.vol = smp.volume
   }
+  const unit = periodUnit(song.format)
   if (fx === Fx.SetFinetune) ch.c2spd = nibbleFinetune(p)
   if (fx === Fx.Offset && p > 0) ch.offset = p
   if (cell.note >= 0 && ch.sample > 0) {
     if (fx === Fx.NoteDelay && p > 0) ch.pendingNote = cell.note
     else if ((fx === Fx.TonePorta || fx === Fx.TonePortaVolSlide) && ch.period > 0)
-      ch.target = periodOf(cell.note, ch.c2spd)
+      ch.target = periodOf(cell.note, ch.c2spd, song.format)
     else trigger(ch, song, cell.note, fx === Fx.Offset ? p : -1)
   }
+  if (cell.vol >= 0) ch.vol = cell.vol
   switch (fx) {
     case Fx.SetVolume:
       ch.vol = p
@@ -128,13 +130,17 @@ export function startRow(ch: Channel, cell: Cell, song: Song, stats: PlayerStats
       ch.vol = clampVol(ch.vol - p)
       break
     case Fx.FinePortaUp:
-      ch.period = clampPeriod(ch.period - p, ch.c2spd)
+      ch.period = clampPeriod(ch.period - p * unit, ch.c2spd, song.format)
       break
     case Fx.FinePortaDown:
-      ch.period = clampPeriod(ch.period + p, ch.c2spd)
+      ch.period = clampPeriod(ch.period + p * unit, ch.c2spd, song.format)
+      break
+    case Fx.FreqAdjust:
+      // 669: raises the period once, on tick 0
+      ch.period = clampPeriod(ch.period + p * unit, ch.c2spd, song.format)
       break
     case Fx.TonePorta:
-      if (p > 0) ch.portaSpeed = p
+      if (p > 0) ch.portaSpeed = p * unit
       break
     case Fx.Vibrato:
       if (p >> 4) ch.vibSpeed = p >> 4
@@ -197,6 +203,7 @@ function vibrato(ch: Channel): number {
 /** Ticks after the first (`t` counts from the row start, including pattern-delay repeats). */
 export function runTick(ch: Channel, cell: Cell, t: number, song: Song): void {
   const p = cell.param
+  const unit = periodUnit(song.format)
   let dPeriod = 0
   let dVol = 0
   let mul = 1
@@ -207,10 +214,10 @@ export function runTick(ch: Channel, cell: Cell, t: number, song: Song): void {
       break
     }
     case Fx.PortaUp:
-      ch.period = clampPeriod(ch.period - p, ch.c2spd)
+      ch.period = clampPeriod(ch.period - p * unit, ch.c2spd, song.format)
       break
     case Fx.PortaDown:
-      ch.period = clampPeriod(ch.period + p, ch.c2spd)
+      ch.period = clampPeriod(ch.period + p * unit, ch.c2spd, song.format)
       break
     case Fx.TonePorta:
       tonePorta(ch)
@@ -220,10 +227,10 @@ export function runTick(ch: Channel, cell: Cell, t: number, song: Song): void {
       volSlide(ch, p)
       break
     case Fx.Vibrato:
-      dPeriod = vibrato(ch)
+      dPeriod = vibrato(ch) * unit
       break
     case Fx.VibratoVolSlide:
-      dPeriod = vibrato(ch)
+      dPeriod = vibrato(ch) * unit
       volSlide(ch, p)
       break
     case Fx.Tremolo:

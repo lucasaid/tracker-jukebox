@@ -107,7 +107,7 @@ export function createTrackerPlayer(
       if (ch === undefined || cell === undefined) continue
       if (rowStart) startRow(ch, cell, song, stats)
       else runTick(ch, cell, t, song)
-      ch.voice.step = periodToHz(ch.outPeriod) / sampleRate
+      ch.voice.step = periodToHz(ch.outPeriod, song.format) / sampleRate
     }
     tickFrames = (sampleRate * 2.5) / s.tempo
     return true
