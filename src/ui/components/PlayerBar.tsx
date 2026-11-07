@@ -1,6 +1,6 @@
 // Bottom transport bar (decision 34). PREV/NEXT arrive with the jukebox in P21.
 import { useEffect, useState } from 'react'
-import { formatRoute } from '../../state/route'
+import { formatRoute, parseRoute } from '../../state/route'
 import { usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import { THEMES } from '../../state/settings'
@@ -43,7 +43,10 @@ export function PlayerBar() {
   const playRandom = () => {
     const pool = entries.filter((e) => e.id !== current?.id)
     const pick = pool[Math.floor(Math.random() * pool.length)]
-    if (pick) void play(pick.id)
+    if (!pick) return
+    void play(pick.id)
+    if (parseRoute(location.hash).page === 'play')
+      location.hash = formatRoute({ page: 'play', id: pick.id, seek: null })
   }
   const total = current ? (current.loops ? '--:--' : formatTime(current.durationSec)) : '--:--'
   return (
