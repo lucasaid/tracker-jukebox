@@ -20,7 +20,7 @@ export function App() {
   const [stereo, setStereo] = useState(1)
   const [muteMask, setMuteMask] = useState(0)
   const [channels, setChannels] = useState(0)
-  const [vizId, setVizId] = useState('scope')
+  const [vizId, setVizId] = useState('pattern')
 
   useEffect(() => {
     const e = engine
