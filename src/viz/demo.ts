@@ -1,4 +1,6 @@
-// Plasma, starfield, copper (decision 31). These keep their own colours, not the theme palette.
+// Plasma, starfield, copper (decision 31). These keep their own colours, not the theme palette,
+// except the starfield's click-on colour mode.
+import { themeColours } from './colours'
 import type { Frame, VisualizerDef, VisualizerInstance } from './types'
 
 const PULSE_SEC = 0.25
@@ -91,7 +93,14 @@ interface Star {
   x: number
   y: number
   z: number
+  /** picks the channel this star follows: group % channel count */
+  group: number
 }
+
+/** Enough groups that any channel count up to this spreads evenly over the stars. */
+const STAR_GROUPS = 64
+/** A trail reaches back to where the star was this many seconds ago. */
+const TRAIL_SEC = 0.12
 
 function starfieldInstance(): VisualizerInstance {
   const drive = createDrive()
@@ -100,12 +109,26 @@ function starfieldInstance(): VisualizerInstance {
     x: Math.random() * 2 - 1,
     y: Math.random() * 2 - 1,
     z: Math.random() * 0.95 + 0.05,
+    group: Math.floor(Math.random() * STAR_GROUPS),
   }))
+  /** per-channel pulse, 1 on a trigger, decaying over PULSE_SEC */
+  const pulses = new Float32Array(STAR_GROUPS)
+  /** click cycles: plain, coloured, plain + trails, coloured + trails */
+  let mode = 0
   return {
+    click() {
+      mode = (mode + 1) % 4
+    },
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)
       if (skip(f)) return
-      const { intensity, pulse } = drive(f, dt)
+      const { intensity } = drive(f, dt)
+      const chs = f.snap.ch
+      const nCh = Math.max(1, Math.min(chs.length, STAR_GROUPS))
+      for (let i = 0; i < nCh; i++)
+        pulses[i] = chs[i]?.triggered ? 1 : Math.max(0, (pulses[i] ?? 0) - dt / PULSE_SEC)
+      const colours = mode & 1 ? themeColours(f.palette) : []
+      const trails = (mode & 2) !== 0
       ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, f.width, f.height)
       const speed = f.reducedMotion ? 0 : 0.25 + 1.2 * intensity
@@ -125,17 +148,42 @@ function starfieldInstance(): VisualizerInstance {
           s.z = 1
           continue
         }
-        // The beat lives in the stars: nearer stars swell, whiten and get a halo.
+        // Each star follows one channel: on its hits nearer stars swell, whiten and get a halo.
+        // Coloured mode fades the group into its theme colour instead of white.
+        const ch = s.group % nCh
+        const pulse = pulses[ch] ?? 0
+        const tint = colours[ch % Math.max(1, colours.length)]
         const near = 1 - s.z
         const size = (near * 2.5 + 0.5) * (1 + pulse * (0.5 + 1.5 * near))
-        const c = Math.round(120 + 135 * near + (135 - 135 * near) * pulse)
+        const c = Math.round(120 + 135 * near + (tint ? 0 : (135 - 135 * near) * pulse))
+        const base = `rgb(${c},${c},255)`
+        // Trails flash with the channel, like the halo: full on a hit, gone once the pulse decays.
+        if (trails && speed > 0 && pulse > 0.05) {
+          const tz = s.z + speed * TRAIL_SEC
+          ctx.beginPath()
+          ctx.moveTo(cx + (s.x / tz) * scale * 0.5, cy + (s.y / tz) * scale * 0.5)
+          ctx.lineTo(px, py)
+          ctx.lineWidth = size * 0.7
+          ctx.globalAlpha = 0.6 * pulse
+          ctx.strokeStyle = tint ?? base
+          ctx.stroke()
+          ctx.globalAlpha = 1
+        }
         if (pulse > 0.05) {
           const halo = size * 3
-          ctx.fillStyle = `rgba(${c},${c},255,${(0.25 * pulse * (0.3 + near)).toFixed(3)})`
+          ctx.globalAlpha = 0.25 * pulse * (0.3 + near)
+          ctx.fillStyle = tint ?? base
           ctx.fillRect(px - halo / 2, py - halo / 2, halo, halo)
+          ctx.globalAlpha = 1
         }
-        ctx.fillStyle = `rgb(${c},${c},255)`
+        ctx.fillStyle = base
         ctx.fillRect(px - size / 2, py - size / 2, size, size)
+        if (tint && pulse > 0) {
+          ctx.globalAlpha = pulse
+          ctx.fillStyle = tint
+          ctx.fillRect(px - size / 2, py - size / 2, size, size)
+          ctx.globalAlpha = 1
+        }
       }
     },
   }

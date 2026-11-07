@@ -5,6 +5,11 @@ import type { Palette } from './types'
 
 const KEYS: readonly (keyof Palette)[] = ['wave', 'accent', 'note', 'inst', 'vol', 'fx', 'fg']
 
+/** The theme's distinct colours, --scope-wave first. */
+export const themeColours = (p: Palette): string[] => [
+  ...new Set(KEYS.map((k) => p[k].toLowerCase()).filter(Boolean)),
+]
+
 export function createColourCycle(): {
   next(): void
   colour(p: Palette): string
@@ -17,7 +22,7 @@ export function createColourCycle(): {
     // the host swaps in a new Palette object on a theme change
     if (p !== last) {
       last = p
-      colours = [...new Set(KEYS.map((k) => p[k].toLowerCase()).filter(Boolean))]
+      colours = themeColours(p)
     }
     return colours
   }
