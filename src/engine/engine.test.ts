@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Fx, NOTE_NONE } from '../formats'
-import type { Cell, MidiSong, Pattern, Song } from '../formats'
-import { computeLength, createTrackerPlayer } from './index'
+import type { Cell, MidiEvent, MidiSong, Pattern, Song, SoundBank, Zone } from '../formats'
+import { computeLength, createMidiPlayer, createTrackerPlayer } from './index'
+import { Stage, createEnv, releaseEnv, startEnv, stepEnv } from './midi-synth'
 import { createChannel, runTick, startRow } from './effects'
 import { createVoice, mixVoice } from './mixer'
 import { periodOf, periodToHz } from './pitch'
@@ -293,5 +294,101 @@ describe('MIDI length', () => {
       target: 'gm',
     }
     expect(computeLength(song).seconds).toBeCloseTo(0.5 + 1 + 1)
+  })
+})
+
+describe('MIDI synth', () => {
+  const SR = 1000
+  const zoneOf = (over: Partial<Zone> = {}, env: Partial<Zone['env']> = {}): Zone => ({
+    keyLo: 0,
+    keyHi: 127,
+    velLo: 0,
+    velHi: 127,
+    data: new Float32Array(100).fill(1),
+    sampleRate: SR,
+    rootKey: 60,
+    tuneCents: 0,
+    loopStart: 0,
+    loopEnd: 100,
+    loopMode: 1,
+    attenuationDb: 0,
+    pan: 0,
+    env: { delayS: 0, attackS: 0, holdS: 0, decayS: 1, sustainDb: 0, releaseS: 0.001, ...env },
+    exclusiveClass: 0,
+    ...over,
+  })
+  const bankOf = (zone: Zone): SoundBank => ({
+    name: '',
+    presets: new Map([[0, { name: 'p', zones: [zone] }]]),
+  })
+  const midiOf = (events: MidiEvent[]): MidiSong => ({
+    kind: 'midi',
+    format: 'midi',
+    title: '',
+    tracker: '',
+    message: '',
+    ticksPerBeat: 480,
+    tempoMap: [{ tick: 0, usPerBeat: 500000 }],
+    events,
+    channelsUsed: [],
+    target: 'gm',
+  })
+  const on = (tick: number, ch: number, key: number): MidiEvent => ({
+    tick,
+    ch,
+    type: 'noteOn',
+    key,
+    vel: 100,
+  })
+  const run = (p: ReturnType<typeof createMidiPlayer>, frames: number): void => {
+    p.render(new Float32Array(frames), new Float32Array(frames), frames)
+  }
+
+  it('envelope stages change at their configured frames', () => {
+    const e = createEnv()
+    startEnv(
+      e,
+      { delayS: 0.01, attackS: 0.02, holdS: 0.01, decayS: 0.5, sustainDb: 20, releaseS: 0.1 },
+      SR,
+    )
+    for (let i = 0; i < 10; i++) stepEnv(e)
+    // the stage flips on the step after its last frame, so delay (10 frames) shows Attack at step 11
+    expect(e.stage).toBe(Stage.Delay)
+    stepEnv(e)
+    expect(e.stage).toBe(Stage.Attack)
+    for (let i = 0; i < 20; i++) stepEnv(e)
+    expect(e.stage).toBe(Stage.Hold)
+    for (let i = 0; i < 10; i++) stepEnv(e)
+    expect(e.stage).toBe(Stage.Decay)
+    for (let i = 0; i < 150; i++) stepEnv(e)
+    expect(e.stage).toBe(Stage.Sustain)
+    expect(stepEnv(e)).toBeCloseTo(0.1, 5)
+    releaseEnv(e)
+    for (let i = 0; i < 200; i++) stepEnv(e)
+    expect(e.stage).toBe(Stage.Done)
+  })
+
+  it('the 65th note steals the oldest voice', () => {
+    const events = [on(0, 0, 60), ...Array.from({ length: 64 }, (_, k) => on(0, 1, 30 + k))]
+    const p = createMidiPlayer(midiOf(events), bankOf(zoneOf()), SR)
+    run(p, 10)
+    expect(p.stats.voices).toBe(64)
+    const snap = p.snapshot()
+    expect(snap.ch[0]?.active).toBe(false)
+    expect(snap.ch[1]?.active).toBe(true)
+  })
+
+  it('an exclusive class releases the earlier note on the same channel', () => {
+    const play = (exclusiveClass: number): number => {
+      const p = createMidiPlayer(
+        midiOf([on(0, 0, 60), on(480, 0, 62)]),
+        bankOf(zoneOf({ exclusiveClass })),
+        SR,
+      )
+      run(p, 700)
+      return p.stats.voices
+    }
+    expect(play(0)).toBe(2)
+    expect(play(1)).toBe(1)
   })
 })

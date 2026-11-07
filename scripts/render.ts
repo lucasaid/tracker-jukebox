@@ -1,9 +1,10 @@
 // pnpm render — see docs/PLAN.md → Contracts → Script contracts.
 import { readFileSync } from 'node:fs'
-import { basename, extname } from 'node:path'
-import { createTrackerPlayer } from '../src/engine'
-import type { Interpolation } from '../src/engine'
-import { parseFile } from '../src/formats'
+import { basename, extname, relative, resolve, sep as pathSep } from 'node:path'
+import { createMidiPlayer, createTrackerPlayer } from '../src/engine'
+import type { Interpolation, Player, PlayerOptions } from '../src/engine'
+import { parseFile, parseSoundBank } from '../src/formats'
+import type { ParsedFile } from '../src/formats'
 import { writeWav } from './wav'
 
 const MAX_SECONDS = 1800
@@ -43,18 +44,48 @@ const [input, output] = positional
 if (input === undefined || positional.length > 2) usage()
 const outPath = output ?? `./${basename(input as string, extname(input as string))}.wav`
 
+/** MIDI target for a file under trackers/, from scripts/midi-overrides.json (same ids as the manifest). */
+function midiTargetFor(path: string): 'gm' | 'mt32' {
+  const id = relative(
+    'trackers',
+    relative(process.cwd(), resolve(path)).split(pathSep).join('/'),
+  ).toLowerCase()
+  // ponytail: no schema check here, manifest.ts validates the file; only 'mt32' is acted on
+  const overrides: unknown = JSON.parse(readFileSync('scripts/midi-overrides.json', 'utf8'))
+  return typeof overrides === 'object' &&
+    overrides !== null &&
+    Object.entries(overrides).some(([k, v]) => k === id && v === 'mt32')
+    ? 'mt32'
+    : 'gm'
+}
+
+function makePlayer(song: ParsedFile, opts: Partial<PlayerOptions>): Player {
+  if (song.kind === 'tracker') return createTrackerPlayer(song, rate, opts)
+  try {
+    const bank = parseSoundBank(
+      new Uint8Array(readFileSync('public/soundfonts/GeneralUser-GS.sf2')),
+    )
+    return createMidiPlayer(song, bank, rate, opts)
+  } catch (e) {
+    return fail(
+      1,
+      `sound bank: ${e instanceof Error ? e.message : String(e)} (run pnpm fetch-soundfont)`,
+    )
+  }
+}
+
 let song
 try {
-  song = parseFile(new Uint8Array(readFileSync(input as string)))
+  song = parseFile(new Uint8Array(readFileSync(input as string)), {
+    midiTarget: midiTargetFor(input as string),
+  })
 } catch (e) {
   fail(1, `${input}: ${e instanceof Error ? e.message : String(e)}`)
 }
-if (song?.kind !== 'tracker') fail(1, `${input}: only tracker files can be rendered yet`)
+if (song === undefined) fail(1, `${input}: parse failed`)
 else {
-  const player = createTrackerPlayer(song, rate, {
-    interpolation: interp,
-    stereoSeparation: sep / 100,
-  })
+  const playerOpts = { interpolation: interp, stereoSeparation: sep / 100 }
+  const player = makePlayer(song, playerOpts)
   const lefts: Float32Array[] = []
   const rights: Float32Array[] = []
   const l = new Float32Array(CHUNK)

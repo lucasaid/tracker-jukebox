@@ -4,6 +4,7 @@ import {
   ByteReader,
   ParseError,
   decodeCp437,
+  MT32_TO_GM,
   detectFormat,
   parseFile,
   parseSoundBank,
@@ -236,5 +237,16 @@ describe.skipIf(!existsSync(BANK_PATH))('SF2 parser', () => {
   })
   it('rejects non-SF2 input', () => {
     expect(() => parseSoundBank(new Uint8Array(64))).toThrow(ParseError)
+  })
+})
+
+describe('MT32_TO_GM', () => {
+  it('has 128 GM programs, guitars in 24..31 and basses in 32..39', () => {
+    expect(MT32_TO_GM).toHaveLength(128)
+    expect(MT32_TO_GM.every((p) => Number.isInteger(p) && p >= 0 && p <= 127)).toBe(true)
+    expect(MT32_TO_GM[61]).toBeGreaterThanOrEqual(24)
+    expect(MT32_TO_GM[61]).toBeLessThanOrEqual(31)
+    expect(MT32_TO_GM[64]).toBeGreaterThanOrEqual(32)
+    expect(MT32_TO_GM[64]).toBeLessThanOrEqual(39)
   })
 })

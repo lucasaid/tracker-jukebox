@@ -2,7 +2,7 @@ import type { MidiSong, ParsedFile, Song, SoundBank } from '../formats'
 import { NOTE_NONE } from '../formats'
 import { createChannel, runTick, startRow } from './effects'
 import { FORMAT_GAIN, finishMix, mixVoice, skipVoice } from './mixer'
-import { ticksToSeconds } from './midi-synth'
+import { createMidiSynth, ticksToSeconds } from './midi-synth'
 import { periodToHz } from './pitch'
 import { createSequencer } from './sequencer'
 
@@ -248,12 +248,13 @@ export function createTrackerPlayer(
 
 /** Throws RangeError if sampleRate <= 0. */
 export function createMidiPlayer(
-  _song: MidiSong,
-  _bank: SoundBank,
-  _sampleRate: number,
-  _opts?: Partial<PlayerOptions>,
+  song: MidiSong,
+  bank: SoundBank,
+  sampleRate: number,
+  opts: Partial<PlayerOptions> = {},
 ): Player {
-  throw new Error('Not implemented (P25)')
+  if (!(sampleRate > 0)) throw new RangeError('sampleRate must be > 0')
+  return createMidiSynth(song, bank, sampleRate, { ...DEFAULT_PLAYER_OPTIONS, ...opts }, SCOPE_LEN)
 }
 
 /** Silent dry-run; never throws. */
