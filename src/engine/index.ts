@@ -109,12 +109,12 @@ export function createTrackerPlayer(
       else runTick(ch, cell, t, song)
       ch.voice.step = periodToHz(ch.outPeriod, song.format) / sampleRate
     }
-    tickFrames = (sampleRate * 2.5) / s.tempo
+    tickFrames = Math.floor((sampleRate * 2.5) / s.tempo)
     return true
   }
 
   const mix = (left: Float32Array, right: Float32Array, start: number, count: number): void => {
-    const globalGain = song.globalVolume / 64
+    const globalGain = seq.state.globalVolume / 64
     for (let c = 0; c < n; c++) {
       const ch = chans[c]
       if (ch === undefined) continue
@@ -233,7 +233,7 @@ export function createTrackerPlayer(
         out.active = ch.voice.active
         out.note = ch.note
         out.ins = ch.sample
-        out.volume = (ch.outVol / 64) * (song.globalVolume / 64)
+        out.volume = (ch.outVol / 64) * (s.globalVolume / 64)
         out.pan = ch.pan
         out.triggered = ch.triggered
         ch.triggered = false

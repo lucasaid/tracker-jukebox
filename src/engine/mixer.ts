@@ -7,7 +7,7 @@ import type { Interpolation } from './index'
 export const FORMAT_GAIN: Record<TrackerFormat, number> = {
   mod: 0.74,
   stm: 0.54,
-  s3m: 1,
+  s3m: 3.3,
   '669': 1,
   mtm: 0.88,
 }

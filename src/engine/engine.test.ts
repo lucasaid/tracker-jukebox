@@ -223,6 +223,24 @@ describe('effects', () => {
   })
 })
 
+describe('S3M effects', () => {
+  const s3m: Song = { ...song0(), format: 's3m' }
+  function song0(): Song {
+    return { ...songOf([0], [pat(1)]), samples: [sampleOf([1, 1, 1, 1])] }
+  }
+  it('D uses its memory when the parameter is 0, and DxF is a fine slide on tick 0 only', () => {
+    const ch = createChannel(0, 256)
+    startRow(ch, withCell({ ins: 1, fx: Fx.VolSlide, param: 0x02 }), s3m, stats)
+    expect(ch.vol).toBe(64)
+    runTick(ch, withCell({ fx: Fx.VolSlide, param: 0 }), 1, s3m)
+    expect(ch.vol).toBe(62) // remembered 0x02
+    startRow(ch, withCell({ fx: Fx.VolSlide, param: 0x3f }), s3m, stats)
+    expect(ch.vol).toBe(64) // fine up by 3, clamped
+    startRow(ch, withCell({ fx: Fx.VolSlide, param: 0xf4 }), s3m, stats)
+    expect(ch.vol).toBe(60) // fine down by 4
+  })
+})
+
 describe('tracker player', () => {
   const noteSong = (): Song => {
     const p = pat(4)

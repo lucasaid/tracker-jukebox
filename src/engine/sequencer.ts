@@ -13,6 +13,8 @@ export interface SeqState {
   repeat: number
   speed: number
   tempo: number
+  /** 0..64, S3M Vxx changes it */
+  globalVolume: number
   ended: boolean
   /** ended because a jump/break reached a row already played in this run (decision 18) */
   loops: boolean
@@ -37,6 +39,7 @@ export function createSequencer(song: Song): Sequencer {
     repeat: 0,
     speed: song.initialSpeed,
     tempo: song.initialTempo,
+    globalVolume: song.globalVolume,
     ended: false,
     loops: false,
   }
@@ -72,6 +75,9 @@ export function createSequencer(song: Song): Sequencer {
         // ponytail: S3M T0x/T1x tempo slides are not sequenced, add if a file needs them
         case Fx.SetTempo:
           if (p >= 32) state.tempo = p
+          break
+        case Fx.GlobalVolume:
+          state.globalVolume = Math.min(p, 64)
           break
         case Fx.PosJump:
           jumpOrder = p
