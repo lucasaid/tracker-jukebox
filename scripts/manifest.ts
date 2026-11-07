@@ -26,8 +26,10 @@ const ok: { path: string; id: string }[] = []
 let skipped = 0
 let excludedCount = 0
 
+const present = new Set<string>()
 for (const path of walk(trackersDir)) {
   const id = idOf(path)
+  present.add(id)
   if (excluded.has(id)) {
     excludedCount++
     out(`EXCLUDE ${id}`)
@@ -70,10 +72,11 @@ const manifest: Manifest = {
   generatedAt: new Date().toISOString(),
   entries: entries.sort((a, b) => a.id.localeCompare(b.id)),
 }
-// Stamps persist for excluded or removed songs too, so re-adding one keeps its original date.
+// Stamps for files gone from trackers/ are dropped; excluded files are still on disk, so they keep theirs.
+const kept = Object.entries(added).filter(([id]) => present.has(id))
 writeFileSync(
   ADDED_PATH,
-  `${JSON.stringify(Object.fromEntries(Object.entries(added).sort(([a], [b]) => a.localeCompare(b))), null, 2)}\n`,
+  `${JSON.stringify(Object.fromEntries(kept.sort(([a], [b]) => a.localeCompare(b))), null, 2)}\n`,
 )
 writeFileSync(join(root, 'public', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
