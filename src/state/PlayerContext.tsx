@@ -1,13 +1,16 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { MidiTarget } from '../formats'
+import { detectFormat, parseFile } from '../formats'
+import type { MidiTarget, ParsedFile } from '../formats'
+import { computeLength } from '../engine'
 import type { SeekTarget } from '../engine'
 import { AudioEngine } from '../audio/AudioEngine'
 import type { EngineStatus } from '../audio/AudioEngine'
-import { loadManifest } from '../library/manifest'
+import { describe, loadManifest } from '../library/manifest'
 import type { ManifestEntry } from '../library/manifest'
 import { LoadError } from '../net'
 import { useSettings } from './SettingsContext'
+import { loadFavorites, saveFavorites } from './settings'
 
 export interface PlayerApi {
   engine: AudioEngine
@@ -26,18 +29,28 @@ export interface PlayerApi {
   ): Promise<void>
   toggle(): void
   setMuted(ch: number, muted: boolean): void
+  favorites: ReadonlySet<string>
+  toggleFavorite(id: string): void // local ids are ignored
+  /** Rejects with Error('File too large (max 16 MB)') | Error('Not a supported music file') | the parse error. Never uploads. */
+  addLocal(file: File): Promise<ManifestEntry>
 }
 
 const Ctx = createContext<PlayerApi | null>(null)
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1'
 const MANIFEST_URL = './manifest.json'
+const MAX_LOCAL_BYTES = 16 * 1024 * 1024
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings()
   const [engine] = useState(() => new AudioEngine({ debug: DEBUG }))
   const [status, setStatus] = useState<EngineStatus>('locked')
   const [currentId, setCurrentId] = useState<string | null>(null)
-  const [entries, setEntries] = useState<ManifestEntry[]>([])
+  const [manifestEntries, setEntries] = useState<ManifestEntry[]>([])
+  const [locals, setLocals] = useState<{ entry: ManifestEntry; parsed: ParsedFile }[]>([])
+  // The ref lets play() see a file added in the same tick (drop, then play).
+  const localsRef = useRef<{ entry: ManifestEntry; parsed: ParsedFile }[]>([])
+  const [favorites, setFavorites] = useState(() => loadFavorites())
+  const entries = [...manifestEntries, ...locals.map((l) => l.entry)]
   const [manifestError, setManifestError] = useState<LoadError | null>(null)
   const [manifestTry, setManifestTry] = useState(0)
   const [muteMask, setMuteMask] = useState(0)
@@ -92,22 +105,19 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     mode: 'single',
     muteMask,
     async play(id, opts) {
-      const entry = entries.find((e) => e.id === id)
+      const local = localsRef.current.find((l) => l.entry.id === id)
+      const entry = local?.entry ?? manifestEntries.find((e) => e.id === id)
       if (!entry) throw new Error('Song not found')
       await engine.unlock()
       // Mutes belong to one song, so a new song starts unmuted.
       setMuteMask(0)
       engine.setOptions({ muteMask: 0 })
-      if (entry.url === null) return // local files arrive in P19
       try {
-        await engine.load(
-          { id, url: entry.url },
-          {
-            seek: opts?.seek,
-            fadeSec: opts?.fadeSec,
-            midiTarget: opts?.midiTarget ?? entry.midiTarget ?? undefined,
-          },
-        )
+        await engine.load(local ? { id, parsed: local.parsed } : { id, url: entry.url ?? '' }, {
+          seek: opts?.seek,
+          fadeSec: opts?.fadeSec,
+          midiTarget: opts?.midiTarget ?? entry.midiTarget ?? undefined,
+        })
       } catch {
         // The engine already reported the failure as an 'error' event (logged above); a newer
         // load aborting this one is not an error either.
@@ -121,6 +131,32 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const next = muted ? muteMask | (1 << ch) : muteMask & ~(1 << ch)
       setMuteMask(next)
       engine.setOptions({ muteMask: next })
+    },
+    favorites,
+    toggleFavorite(id) {
+      if (id.startsWith('local:')) return
+      const next = new Set(favorites)
+      if (!next.delete(id)) next.add(id)
+      setFavorites(next)
+      saveFavorites(next)
+    },
+    async addLocal(file) {
+      if (file.size > MAX_LOCAL_BYTES) throw new Error('File too large (max 16 MB)')
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      if (detectFormat(bytes) === null) throw new Error('Not a supported music file')
+      const parsed = parseFile(bytes)
+      const { seconds, loops } = computeLength(parsed)
+      const entry = describe(parsed, {
+        id: `local:${localsRef.current.length + 1}:${file.name}`,
+        url: null,
+        file: file.name,
+        sizeBytes: file.size,
+        durationSec: seconds,
+        loops,
+      })
+      localsRef.current = [...localsRef.current, { entry, parsed }]
+      setLocals(localsRef.current)
+      return entry
     },
   }
   return <Ctx value={api}>{children}</Ctx>

@@ -98,6 +98,87 @@
 .colPlay {
   width: 11ch;
 }
+.colStar {
+  width: 3ch;
+  color: var(--hi);
+}
+.colCh {
+  width: 5ch;
+  text-align: right !important;
+}
+.colSize {
+  width: 7ch;
+  text-align: right !important;
+  display: none;
+}
+.search {
+  width: 100%;
+  padding: 6px var(--space-2);
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border-color);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip {
+  padding: 2px var(--space-2);
+  background: none;
+  color: var(--fg);
+  border: 1px solid var(--chip-border-color);
+}
+.chipOn {
+  background: var(--chip-on-bg);
+  color: var(--chip-on-fg);
+  border-color: var(--chip-on-bg);
+}
+.sort,
+.link,
+.star {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: inherit;
+}
+.link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.link:hover {
+  text-decoration: underline;
+}
+.star {
+  color: var(--hi);
+}
+.table tr.selected td {
+  background: var(--row-alt);
+  text-decoration: underline;
+}
+.group {
+  color: var(--accent);
+  text-align: left;
+  padding-top: var(--space-3) !important;
+}
+.message {
+  white-space: pre-wrap;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.drop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 75%);
+  color: var(--hi);
+  border: var(--panel-border) var(--panel-border-color);
+  z-index: 10;
+  pointer-events: none;
+}
 .colFmt {
   width: 6ch;
 }
@@ -159,5 +240,8 @@
 @media (min-width: 600px) {
   .colLen {
     width: 9ch;
+  }
+  .colSize {
+    display: table-cell;
   }
 }

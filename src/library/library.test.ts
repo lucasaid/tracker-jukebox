@@ -3,6 +3,7 @@ import { afterEach, describe as suite, expect, it, vi } from 'vitest'
 import { parseFile } from '../formats'
 import { LoadError } from '../net'
 import { describe, loadManifest } from './manifest'
+import { EMPTY_FILTERS, filterEntries, sortEntries } from './search'
 import type { ManifestEntry } from './manifest'
 
 const meta = (file: string) => ({
@@ -76,5 +77,53 @@ suite('loadManifest', () => {
     await expect(loadManifest('m.json')).rejects.toMatchObject({ status: 404 })
     vi.stubGlobal('fetch', () => Promise.resolve(new Response('{nope')))
     await expect(loadManifest('m.json')).rejects.toThrow(LoadError)
+  })
+})
+
+suite('search', () => {
+  const entry = (over: Partial<ManifestEntry>): ManifestEntry => ({
+    ...describe(load('mod/90210.MOD'), meta('a.mod')),
+    ...over,
+  })
+  const list = [
+    entry({ id: 'a', title: 'Zeta', format: 'mod', channels: 4, durationSec: 30, file: 'a.mod' }),
+    entry({ id: 'b', title: 'alpha', format: 's3m', channels: 16, durationSec: 10, file: 'b.s3m' }),
+    entry({ id: 'c', title: 'Beta', format: 'mod', channels: 8, durationSec: 10, file: 'c.mod' }),
+  ]
+  const ids = (es: ManifestEntry[]) => es.map((e) => e.id)
+
+  it('matches the query case-insensitively against title, file, samples and message', () => {
+    const f = { ...EMPTY_FILTERS }
+    expect(ids(filterEntries(list, { ...f, query: '  ALPHA ' }, new Set()))).toEqual(['b'])
+    expect(ids(filterEntries(list, { ...f, query: 'c.mod' }, new Set()))).toEqual(['c'])
+    expect(ids(filterEntries(list, { ...f, query: 'bass.sam' }, new Set()))).toEqual([
+      'a',
+      'b',
+      'c',
+    ])
+    expect(filterEntries(list, { ...f, query: 'no such text' }, new Set())).toEqual([])
+    expect(filterEntries(list, { ...f, query: '   ' }, new Set())).toHaveLength(3)
+  })
+  it('combines format, channel and favorite filters, where empty means all', () => {
+    const f = { ...EMPTY_FILTERS }
+    expect(ids(filterEntries(list, { ...f, formats: ['mod'] }, new Set()))).toEqual(['a', 'c'])
+    expect(
+      ids(filterEntries(list, { ...f, formats: ['mod'], channels: [8, 16] }, new Set())),
+    ).toEqual(['c'])
+    expect(ids(filterEntries(list, { ...f, favoritesOnly: true }, new Set(['b', 'zz'])))).toEqual([
+      'b',
+    ])
+  })
+  it('sorts strings by base letters, numbers numerically, in both directions, stably', () => {
+    expect(ids(sortEntries(list, 'title', 'asc'))).toEqual(['b', 'c', 'a'])
+    expect(ids(sortEntries(list, 'title', 'desc'))).toEqual(['a', 'c', 'b'])
+    expect(ids(sortEntries(list, 'durationSec', 'asc'))).toEqual(['b', 'c', 'a'])
+    expect(ids(sortEntries(list, 'durationSec', 'desc'))).toEqual(['a', 'b', 'c'])
+    expect(ids(sortEntries(list, 'channels', 'desc'))).toEqual(['b', 'c', 'a'])
+  })
+  it('does not mutate its input', () => {
+    const copy = [...list]
+    sortEntries(list, 'title', 'asc')
+    expect(list).toEqual(copy)
   })
 })

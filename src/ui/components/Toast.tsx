@@ -6,6 +6,12 @@ import { usePlayer } from '../../state/PlayerContext'
 import styles from '../ui.module.css'
 
 const SHOW_MS = 6000
+const EVENT = 'tj-toast'
+
+/** Shows a message in the toast stack from anywhere in the UI. */
+export function showToast(text: string): void {
+  window.dispatchEvent(new CustomEvent<string>(EVENT, { detail: text }))
+}
 
 interface Item {
   key: number
@@ -24,12 +30,22 @@ export function Toast() {
 
   useEffect(() => {
     let next = 0
-    return engine.on((e) => {
-      if (e.type !== 'error') return
-      const item = { key: next++, text: `${label(e.error)}: ${e.error.message}` }
+    const add = (text: string): void => {
+      const item = { key: next++, text }
       setItems((list) => [...list, item])
       setTimeout(() => setItems((list) => list.filter((x) => x.key !== item.key)), SHOW_MS)
+    }
+    const onToast = (e: Event): void => {
+      if (e instanceof CustomEvent && typeof e.detail === 'string') add(e.detail)
+    }
+    window.addEventListener(EVENT, onToast)
+    const off = engine.on((e) => {
+      if (e.type === 'error') add(`${label(e.error)}: ${e.error.message}`)
     })
+    return () => {
+      window.removeEventListener(EVENT, onToast)
+      off()
+    }
   }, [engine])
 
   return (
