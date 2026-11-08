@@ -110,6 +110,18 @@ function Shell() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  // Media keys step like N / Shift+N: the jukebox queue, else the Browse order.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const ms = navigator.mediaSession
+    ms.setActionHandler('nexttrack', () => step(1))
+    ms.setActionHandler('previoustrack', () => step(-1))
+    return () => {
+      ms.setActionHandler('nexttrack', null)
+      ms.setActionHandler('previoustrack', null)
+    }
+  })
+
   const page = route.page
   const landing = page === 'landing'
   return (

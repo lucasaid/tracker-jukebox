@@ -15,6 +15,32 @@ import { LoadError } from '../net'
 import { useSettings } from './SettingsContext'
 import { loadFavorites, saveFavorites } from './settings'
 
+/** `sec` of 8 kHz 16-bit mono near-silence as a WAV: a ±3 LSB (≈ −80 dBFS) square wave.
+ *  True digital silence won't do: Firefox only gives media keys to media it measures as audible. */
+function quietWav(sec: number): Blob {
+  const rate = 8000
+  const n = rate * sec
+  const v = new DataView(new ArrayBuffer(44 + n * 2))
+  const text = (at: number, s: string): void => {
+    for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i))
+  }
+  text(0, 'RIFF')
+  v.setUint32(4, 36 + n * 2, true)
+  text(8, 'WAVEfmt ')
+  v.setUint32(16, 16, true) // fmt chunk size
+  v.setUint16(20, 1, true) // PCM
+  v.setUint16(22, 1, true) // mono
+  v.setUint32(24, rate, true)
+  v.setUint32(28, rate * 2, true) // bytes per second
+  v.setUint16(32, 2, true) // block align
+  v.setUint16(34, 16, true) // bits per sample
+  text(36, 'data')
+  v.setUint32(40, n * 2, true)
+  // ponytail: the ±3 level is a guess at Firefox's audible threshold; raise it if keys still miss
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, i % 16 < 8 ? 3 : -3, true)
+  return new Blob([v.buffer], { type: 'audio/wav' })
+}
+
 export interface PlayerApi {
   engine: AudioEngine
   status: EngineStatus
@@ -273,6 +299,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [mode, engine])
 
+  // Chrome only sends media keys to a tab playing an <audio>/<video>, and tracker and MIDI songs
+  // are Web Audio only: a near-silent looping element plays alongside so the keys come here, not to
+  // another tab. Chrome ignores media shorter than ~5 s, hence 10 s.
+  const keepAlive = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => {
+    if (status === 'playing') {
+      keepAlive.current ??= Object.assign(new Audio(URL.createObjectURL(quietWav(10))), {
+        loop: true,
+      })
+      // ponytail: autoplay refused → media keys fall back to the browser's default target
+      keepAlive.current.play().catch(() => null)
+    } else if (status !== 'loading') keepAlive.current?.pause()
+  }, [status])
+
   // Media keys and lock-screen controls (optional API).
   const currentEntry = entries.find((e) => e.id === currentId) ?? null
   useEffect(() => {
@@ -291,13 +331,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ms.playbackState = status === 'playing' ? 'playing' : status === 'paused' ? 'paused' : 'none'
     ms.setActionHandler('play', () => engine.play())
     ms.setActionHandler('pause', () => engine.pause())
-    const step = (dir: 'next' | 'prev') => () => {
-      const q = queue.current
-      if (q) void live.current.playQueued(() => (dir === 'next' ? q.next() : q.prev()), 0)
-    }
-    ms.setActionHandler('nexttrack', mode === 'jukebox' ? step('next') : null)
-    ms.setActionHandler('previoustrack', mode === 'jukebox' ? step('prev') : null)
-  }, [engine, mode, status])
+    // nexttrack / previoustrack are App's: they step like the bar buttons (ui useStep)
+  }, [engine, status])
 
   const api: PlayerApi = {
     engine,

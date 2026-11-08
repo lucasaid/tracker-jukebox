@@ -1099,7 +1099,7 @@ export function readWav(path: string): { sampleRate: number; channels: Float32Ar
   - `AudioContext` + `AudioWorkletNode`: required.
   - `navigator.mediaSession` (P27), optional:
     - metadata `{ title, artist: entry.tracker, album: 'Tracker Jukebox' }`
-    - handlers `play`, `pause`, and in jukebox mode `nexttrack`/`previoustrack`
+    - handlers `play`, `pause`, and `nexttrack`/`previoustrack` (registered by App: the jukebox queue, else the Browse order, like the bar buttons)
   - `navigator.clipboard.writeText` (P20). Fallback: a read-only input with the link selected.
   - `matchMedia('(prefers-reduced-motion: reduce)')`.
   - Drag & drop: `DataTransfer.files`. Items that aren't files are ignored, with a toast "Only files can be dropped".
