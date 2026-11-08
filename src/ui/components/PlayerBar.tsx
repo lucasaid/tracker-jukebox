@@ -22,6 +22,30 @@ function Label(props: { text: string; icon: string }) {
   )
 }
 
+/** Song stepping shared by the bar buttons and the N / Shift+N keys. */
+export function useStep(): { step: (dir: 1 | -1) => void; playAndFollow: (id: string) => void } {
+  const { current, mode, prev, next, entries, play, favorites } = usePlayer()
+  const { settings } = useSettings()
+  /** Plays `id` and keeps an open play page on it. */
+  const playAndFollow = (id: string) => {
+    void play(id)
+    if (parseRoute(location.hash).page === 'play')
+      location.hash = formatRoute({ page: 'play', id, seek: null })
+  }
+  /** Jukebox: the queue. Otherwise the Browse order (saved sort and chips, not the search text),
+   *  or the whole library if the chips match nothing; wraps at both ends. */
+  const step = (dir: 1 | -1) => {
+    if (mode === 'jukebox') return void (dir === 1 ? next() : prev())
+    const { sortKey, sortDir, ...chips } = settings.browse
+    const shown = filterEntries(entries, { ...EMPTY_FILTERS, ...chips }, favorites)
+    const ids = sortEntries(shown.length > 0 ? shown : entries, sortKey, sortDir).map((e) => e.id)
+    const i = current ? ids.indexOf(current.id) : -1
+    const id = ids[(i + dir + ids.length) % ids.length]
+    if (id) playAndFollow(id)
+  }
+  return { step, playAndFollow }
+}
+
 export function PlayerBar() {
   const {
     engine,
@@ -29,17 +53,15 @@ export function PlayerBar() {
     current,
     toggle,
     mode,
-    prev,
-    next,
     random,
     loop,
     setLoop,
     entries,
-    play,
     favorites,
     toggleFavorite,
   } = usePlayer()
   const { settings, update } = useSettings()
+  const { step, playAndFollow } = useStep()
   const [sec, setSec] = useState(0)
   const [dragSec, setDragSec] = useState<number | null>(null)
   const [bank, setBank] = useState<{ loaded: number; total: number | null } | null>(null)
@@ -68,28 +90,11 @@ export function PlayerBar() {
     setSec(dragSec)
     setDragSec(null)
   }
-  /** Plays `id` and keeps an open play page on it. */
-  const playAndFollow = (id: string) => {
-    void play(id)
-    if (parseRoute(location.hash).page === 'play')
-      location.hash = formatRoute({ page: 'play', id, seek: null })
-  }
   const playRandom = () => {
     if (mode === 'jukebox') return void random()
     const pool = entries.filter((e) => e.id !== current?.id)
     const pick = pool[Math.floor(Math.random() * pool.length)]
     if (pick) playAndFollow(pick.id)
-  }
-  /** Jukebox: the queue. Otherwise the Browse order (saved sort and chips, not the search text),
-   *  or the whole library if the chips match nothing; wraps at both ends. */
-  const step = (dir: 1 | -1) => {
-    if (mode === 'jukebox') return void (dir === 1 ? next() : prev())
-    const { sortKey, sortDir, ...chips } = settings.browse
-    const shown = filterEntries(entries, { ...EMPTY_FILTERS, ...chips }, favorites)
-    const ids = sortEntries(shown.length > 0 ? shown : entries, sortKey, sortDir).map((e) => e.id)
-    const i = current ? ids.indexOf(current.id) : -1
-    const id = ids[(i + dir + ids.length) % ids.length]
-    if (id) playAndFollow(id)
   }
   const total = current ? (current.loops ? '--:--' : formatTime(current.durationSec)) : '--:--'
   return (

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { AudioEngine } from './audio/AudioEngine'
 import { ConnectOverlay } from './ui/components/ConnectOverlay'
 import { ErrorBoundary } from './ui/components/ErrorBoundary'
-import { PlayerBar } from './ui/components/PlayerBar'
+import { PlayerBar, useStep } from './ui/components/PlayerBar'
 import { Toast, showToast } from './ui/components/Toast'
 import { Browse } from './ui/pages/Browse'
 import { Credits } from './ui/pages/Credits'
@@ -20,6 +20,7 @@ const TYPING = 'input, textarea, select, [contenteditable]'
 
 function Shell() {
   const player = usePlayer()
+  const { step } = useStep()
   const { settings, update } = useSettings()
   const [route, go] = useHashRoute()
   useEffect(() => {
@@ -90,7 +91,7 @@ function Shell() {
           go({ page: 'play', id: player.current.id, seek: null })
         }
       } else if (e.key === 'n' || e.key === 'N') {
-        void (e.shiftKey ? player.prev() : player.next())
+        step(e.shiftKey ? -1 : 1)
       } else if (e.key === 'v' || e.key === 'V') {
         const i = visualizers.findIndex((v) => v.id === settings.player.lastViz)
         const d = e.shiftKey ? visualizers.length - 1 : 1
