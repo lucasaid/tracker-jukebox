@@ -102,6 +102,22 @@ export function VizFrame(props: { children: ReactNode }) {
     const onFullscreen = (): void => {
       if (!document.fullscreenElement) setFull(false)
     }
+    // Keep the screen awake. The browser drops the lock when the tab is hidden, so take it again
+    // on return. Refused (battery saver) or unsupported → the screen sleeps as usual.
+    let lock: WakeLockSentinel | null = null
+    let stopped = false
+    const keepAwake = (): void => {
+      if (document.visibilityState !== 'visible') return
+      void navigator.wakeLock
+        ?.request('screen')
+        .then((l) => {
+          if (stopped) void l.release()
+          else lock = l
+        })
+        .catch(() => null)
+    }
+    keepAwake()
+    document.addEventListener('visibilitychange', keepAwake)
     root.dataset.vizFull = '' // App skips its page-navigation shortcuts while this is set
     wake()
     window.addEventListener('pointermove', wake)
@@ -115,6 +131,9 @@ export function VizFrame(props: { children: ReactNode }) {
       window.removeEventListener('click', onClick, true)
       window.removeEventListener('keydown', onKey)
       document.removeEventListener('fullscreenchange', onFullscreen)
+      document.removeEventListener('visibilitychange', keepAwake)
+      stopped = true
+      void lock?.release()
       clearTimeout(timer)
       delete root.dataset.idle
       delete root.dataset.vizFull
