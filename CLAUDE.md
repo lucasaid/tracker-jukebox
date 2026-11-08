@@ -1,6 +1,6 @@
 # Tracker Jukebox
 
-A static site that plays 90s BBS tracker music (MOD, S3M, STM, 669, MTM) and MIDI through our own player. React + TypeScript + Vite.
+A static site that plays 90s BBS tracker music (MOD, S3M, STM, 669, MTM) and MIDI through our own player, plus MP3 and FLAC streamed through `<audio>` (P29–P31). React + TypeScript + Vite.
 
 ## Before each phase
 
@@ -9,7 +9,7 @@ A static site that plays 90s BBS tracker music (MOD, S3M, STM, 669, MTM) and MID
    - **Contracts**
    - the **Implementation decisions** the phase refers to
    - the phase's own section (Scope, Acceptance, commit message)
-2. Work only on the current phase (P1–P28, in order). Don't start the next phase until the user says so.
+2. Work only on the current phase (P1–P31, in order). Don't start the next phase until the user says so.
 3. End the phase with the checkpoint report from `docs/PLAN.md`, including a suggested commit message `type(scope): message`. **The user makes every commit**: never run `git add`, `commit`, `push` or `branch`.
 
 ## After each phase
@@ -49,6 +49,7 @@ pnpm manifest                    # from P8: trackers/ → public/music + public/
 pnpm render <file> [out.wav]     # from P9: offline render with our engine
 pnpm compare [format|id]         # from P10: compare against openmpt123 (dev-only reference)
 pnpm fetch-soundfont             # from P24
+pnpm manage                      # local-only library manager (exclude files, titles, MIDI targets)
 ```
 
 - `pnpm check` and `pnpm build` must both pass before a checkpoint. Paste the last ~15 lines of their output into the report.
@@ -63,7 +64,7 @@ pnpm fetch-soundfont             # from P24
 - **Dependencies:** never add, remove or upgrade an npm package, tool, font or asset without stopping to ask.
 - **Contracts:** the signatures, message shapes, storage keys, manifest schema and exit codes in `docs/PLAN.md` are fixed. To change one, stop and propose the change.
 - **Never touch:**
-  - `trackers/`, which is read-only.
+  - `trackers/`, which is read-only. `trackers/private/` is gitignored local-only music: never commit it or print its file names in commits. Its date-added stamps live in the gitignored `scripts/added.private.json`, which only `scripts/manifest.ts` writes.
   - anything outside the repo.
   - `public/music` and `public/manifest.json` by hand. Only `scripts/manifest.ts` writes them.
 - **Network:** only for `pnpm install`, the font download (P2) and the SoundFont (P24).
