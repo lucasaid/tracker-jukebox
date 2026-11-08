@@ -511,6 +511,27 @@ select {
 button {
   cursor: pointer;
 }
+/* Same tokens as the text inputs. appearance: none drops the OS widget (white on macOS);
+   the arrow is two gradient triangles in the text colour. color-scheme themes the native
+   pop-up list where option colours are ignored (macOS); every theme is dark. */
+select {
+  appearance: none;
+  color-scheme: dark;
+  padding: 2px calc(var(--space-2) + 14px) 2px var(--space-2);
+  background:
+    linear-gradient(45deg, transparent 50%, currentColor 50%) right 11px center / 5px 5px no-repeat,
+    linear-gradient(135deg, currentColor 50%, transparent 50%) right 6px center / 5px 5px no-repeat,
+    var(--input-bg);
+  color: var(--input-fg);
+  border: max(var(--input-border-width), 1px) solid;
+  border-color: var(--input-border-color);
+  border-radius: 0;
+  cursor: pointer;
+}
+option {
+  background: var(--input-bg);
+  color: var(--input-fg);
+}
 a {
   color: var(--link);
   text-shadow: var(--link-glow);
