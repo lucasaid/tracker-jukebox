@@ -1,5 +1,5 @@
 // Full-screen view and share-link target, with VIZ / MESSAGE / SAMPLES tabs.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { parseFile } from '../../formats'
 import type { ParsedFile } from '../../formats'
 import type { ManifestEntry } from '../../library/manifest'
@@ -46,6 +46,16 @@ export function NowPlaying({ id }: { id: string }) {
   const song = playing ? engine.current?.song : preview.song
   const isTracker = entry?.format !== 'midi'
   const shown: Tab = tab === 'samples' && !isTracker ? 'viz' : tab
+
+  // Showing the playing song → follow it to the next one (NEXT/PREV/RANDOM, jukebox advance, media keys).
+  const currentId = current?.id
+  const followed = useRef(currentId)
+  useEffect(() => {
+    const was = followed.current
+    followed.current = currentId
+    if (currentId !== undefined && was === id && currentId !== id)
+      location.hash = formatRoute({ page: 'play', id: currentId, seek: null })
+  }, [currentId, id])
 
   useEffect(() => {
     const onTab = (): void => setTab((t) => takeTab() ?? t)
