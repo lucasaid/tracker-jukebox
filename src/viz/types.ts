@@ -46,4 +46,6 @@ export interface VisualizerDef {
   id: string
   name: string
   create(): VisualizerInstance
+  /** false → unavailable for streamed (MP3/FLAC) songs: the picker greys it out and the host draws Scope */
+  streams?: false
 }

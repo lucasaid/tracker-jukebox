@@ -7,6 +7,7 @@ const VU_DECAY_SEC = 0.3
 export const channels: VisualizerDef = {
   id: 'channels',
   name: 'Channels',
+  streams: false,
   create: () => {
     let vu: number[] = []
     const cycle = createColourCycle()

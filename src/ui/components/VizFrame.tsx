@@ -26,6 +26,7 @@ function TitleCard(props: { entry: ManifestEntry }) {
   const { entry } = props
   const title = entry.title || entry.file
   const meta = [
+    entry.artist,
     entry.format.toUpperCase(),
     entry.tracker,
     `${entry.channels}CH`,

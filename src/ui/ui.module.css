@@ -85,7 +85,8 @@
   background: var(--btn-hover-bg);
   color: var(--btn-hover-fg);
 }
-.btn:disabled {
+.btn:disabled,
+.chip:disabled {
   opacity: 0.4;
   cursor: default;
 }

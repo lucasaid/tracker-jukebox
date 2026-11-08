@@ -1,11 +1,11 @@
 // Full-screen view and share-link target, with VIZ / MESSAGE / SAMPLES tabs.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseFile } from '../../formats'
 import type { ParsedFile } from '../../formats'
 import type { ManifestEntry } from '../../library/manifest'
 import { fetchBytes } from '../../net'
 import { formatRoute } from '../../state/route'
-import { usePlayer } from '../../state/PlayerContext'
+import { asStream, streamOf, usePlayer } from '../../state/PlayerContext'
 import { useSettings } from '../../state/SettingsContext'
 import { VisualizerHost } from '../../viz'
 import { formatTime } from '../components/PlayerBar'
@@ -45,7 +45,8 @@ export function NowPlaying({ id }: { id: string }) {
   const playing = entry !== null && entry.id === current?.id
   const preview = usePreview(playing ? null : entry)
   const song = playing ? engine.current?.song : preview.song
-  const isTracker = entry?.format !== 'midi'
+  const streamed = entry !== null && asStream(entry.format) !== null
+  const isTracker = entry !== null && entry.format !== 'midi' && !streamed
   const shown: Tab = tab === 'samples' && !isTracker ? 'viz' : tab
 
   // Showing the playing song → follow it to the next one (NEXT/PREV/RANDOM, jukebox advance, media keys).
@@ -141,7 +142,7 @@ export function NowPlaying({ id }: { id: string }) {
               />
             </VizFrame>
             <VizPicker />
-            {playing && <ChannelStrip />}
+            {playing && !streamed && <ChannelStrip />}
           </>
         )}
         {shown === 'message' && <MessageScroller message={entry?.message ?? ''} />}
@@ -181,8 +182,12 @@ function usePreview(entry: ManifestEntry | null): { song?: ParsedFile; error?: s
   const url = entry?.url ?? null
   const entryId = entry?.id ?? null
   const midiTarget = entry?.midiTarget ?? undefined
+  const format = entry ? asStream(entry.format) : null
+  // MP3/FLAC: the manifest already has everything a still preview shows, so nothing is fetched.
+  // Entries are stable objects, so this is one preview object per song.
+  const stream = useMemo(() => (entry && format ? streamOf(entry, format) : null), [entry, format])
   useEffect(() => {
-    if (url === null || entryId === null) return
+    if (url === null || entryId === null || format !== null) return
     const abort = new AbortController()
     fetchBytes(url, { signal: abort.signal }).then(
       (bytes) => {
@@ -198,6 +203,7 @@ function usePreview(entry: ManifestEntry | null): { song?: ParsedFile; error?: s
       },
     )
     return () => abort.abort()
-  }, [url, entryId, midiTarget])
+  }, [url, entryId, midiTarget, format])
+  if (stream) return { song: stream }
   return state !== null && state.id === entryId ? state : {}
 }

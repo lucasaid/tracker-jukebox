@@ -108,6 +108,7 @@ function drawRoll(
 export const pattern: VisualizerDef = {
   id: 'pattern',
   name: 'Pattern',
+  streams: false,
   create: () => {
     let page = 0
     let pages = 1

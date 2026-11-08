@@ -66,26 +66,28 @@ const pad2 = (n: number): string => String(n).padStart(2, '0')
 
 /** The song at its first row / first tick with nothing sounding: what a preview draws. */
 function stillSnapshot(song: ParsedFile): Snapshot {
-  const n = song.kind === 'tracker' ? song.channels : 16
+  const n = song.kind === 'tracker' ? song.channels : song.kind === 'stream' ? 2 : 16
   return {
     frame: 0,
     seconds: 0,
     pos:
-      song.kind === 'tracker'
-        ? {
-            kind: 'tracker',
-            order: 0,
-            pattern: song.orders[0] ?? 0,
-            row: 0,
-            tick: 0,
-            speed: song.initialSpeed,
-            tempo: song.initialTempo,
-          }
-        : {
-            kind: 'midi',
-            tick: 0,
-            tempo: song.kind === 'midi' ? 6e7 / (song.tempoMap[0]?.usPerBeat ?? 500000) : 0,
-          },
+      song.kind === 'stream'
+        ? { kind: 'stream' }
+        : song.kind === 'tracker'
+          ? {
+              kind: 'tracker',
+              order: 0,
+              pattern: song.orders[0] ?? 0,
+              row: 0,
+              tick: 0,
+              speed: song.initialSpeed,
+              tempo: song.initialTempo,
+            }
+          : {
+              kind: 'midi',
+              tick: 0,
+              tempo: song.kind === 'midi' ? 6e7 / (song.tempoMap[0]?.usPerBeat ?? 500000) : 0,
+            },
     ch: Array.from({ length: n }, () => ({
       active: false,
       note: NOTE_NONE,
@@ -121,8 +123,11 @@ export function VisualizerHost(props: {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
     if (!box || !canvas || !ctx) return
-    const instance = getVisualizer(id).create()
+    const def = getVisualizer(id)
+    const instance = def.create()
     instanceRef.current = instance
+    // Made on the first streamed frame for a visualizer that can't draw MP3/FLAC.
+    let fallback: VisualizerInstance | null = null
 
     const glowCanvas = glowRef.current
     const glowCtx = glowCanvas?.getContext('2d')
@@ -179,7 +184,11 @@ export function VisualizerHost(props: {
         f = { snap: latest.snap, song: latest.song, time, freq, ...size, reducedMotion, palette }
       }
       try {
-        instance.draw(ctx, f, dt)
+        const target =
+          def.streams === false && latest?.song.kind === 'stream'
+            ? (fallback ??= getVisualizer('scope').create())
+            : instance
+        target.draw(ctx, f, dt)
         // Bloom: a small copy on an overlay, so the main canvas (and any trails it keeps) is untouched.
         if (glow && glowCanvas && glowCtx && !NO_GLOW.has(id)) {
           glowCtx.drawImage(canvas, 0, 0, glowCanvas.width, glowCanvas.height)
@@ -208,6 +217,7 @@ export function VisualizerHost(props: {
       resizeObserver.disconnect()
       themeObserver.disconnect()
       instance.dispose?.()
+      fallback?.dispose?.()
       instanceRef.current = null
     }
   }, [id, vizId, engine, label, preview])

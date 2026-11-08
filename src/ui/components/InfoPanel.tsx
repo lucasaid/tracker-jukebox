@@ -37,9 +37,17 @@ export function InfoPanel({ entry, details = true }: { entry: ManifestEntry; det
     <section className={styles.panel} aria-label={`Info: ${entry.title}`}>
       <h2 className={styles.heading}>{entry.title.toUpperCase()}</h2>
       <p className={styles.note}>
-        {entry.file} · {entry.tracker} · {entry.format.toUpperCase()} · {entry.channels}ch ·{' '}
-        {entry.loops ? '--:--' : formatTime(entry.durationSec)} ·{' '}
-        {Math.ceil(entry.sizeBytes / 1024)} KB
+        {[
+          entry.file,
+          entry.artist,
+          entry.tracker,
+          entry.format.toUpperCase(),
+          `${entry.channels}ch`,
+          entry.loops ? '--:--' : formatTime(entry.durationSec),
+          `${Math.ceil(entry.sizeBytes / 1024)} KB`,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </p>
       <p>
         <button

@@ -63,10 +63,10 @@ interface Local {
   url?: string
 }
 
-const asStream = (f: Format): StreamFormat | null => (f === 'mp3' || f === 'flac' ? f : null)
+export const asStream = (f: Format): StreamFormat | null => (f === 'mp3' || f === 'flac' ? f : null)
 
 /** A manifest entry as the StreamFile the engine needs; the manifest already has its tags. */
-const streamOf = (e: ManifestEntry, format: StreamFormat): StreamFile => ({
+export const streamOf = (e: ManifestEntry, format: StreamFormat): StreamFile => ({
   kind: 'stream',
   format,
   title: e.title,
@@ -280,7 +280,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     navigator.mediaSession.metadata = currentEntry
       ? new MediaMetadata({
           title: currentEntry.title || currentEntry.file,
-          artist: currentEntry.tracker,
+          artist: currentEntry.artist || currentEntry.tracker,
           album: 'Tracker Jukebox',
         })
       : null
