@@ -27,6 +27,8 @@ const toggle = <T,>(list: readonly T[], v: T): T[] =>
 
 const isLocal = (e: ManifestEntry): boolean => e.id.startsWith('local:')
 
+const PAGE_SIZES = [25, 50, 100] as const
+
 export function Browse() {
   const { entries, manifestError, retryManifest, current, play, favorites, toggleFavorite } =
     usePlayer()
@@ -45,6 +47,14 @@ export function Browse() {
   const rows = sortEntries(filterEntries(entries, filters, favorites), sort.key, sort.dir)
   const bundled = rows.filter((e) => !isLocal(e))
   const locals = rows.filter(isLocal)
+  // ponytail: page size is session-only; move it into Settings.browse if it should persist
+  const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0])
+  // The page belongs to one filter + sort; any change goes back to page 1 (index 0).
+  const listKey = JSON.stringify([filters, sort, pageSize])
+  const [paging, setPaging] = useState({ listKey, page: 0 })
+  const lastPage = Math.max(0, Math.ceil(bundled.length / pageSize) - 1)
+  const page = paging.listKey === listKey ? Math.min(paging.page, lastPage) : 0
+  const goTo = (p: number): void => setPaging({ listKey, page: p })
   const channelCounts = [...new Set(entries.map((e) => e.channels))].sort((a, b) => a - b)
 
   const sortBy = (key: SortKey): void =>
@@ -187,7 +197,7 @@ export function Browse() {
                     ))}
                   </tr>
                 </thead>
-                <tbody>{bundled.map(row)}</tbody>
+                <tbody>{bundled.slice(page * pageSize, (page + 1) * pageSize).map(row)}</tbody>
                 {locals.length > 0 && (
                   <tbody>
                     <tr>
@@ -199,6 +209,43 @@ export function Browse() {
                   </tbody>
                 )}
               </table>
+            )}
+            {bundled.length > PAGE_SIZES[0] && (
+              <nav className={styles.chips} aria-label="Pages">
+                <label>
+                  Show{' '}
+                  <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+                    {PAGE_SIZES.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className={styles.btn} disabled={page === 0} onClick={() => goTo(0)}>
+                  FIRST
+                </button>
+                <button className={styles.btn} disabled={page === 0} onClick={() => goTo(page - 1)}>
+                  PREV
+                </button>
+                <span className={styles.note} aria-live="polite">
+                  {`Page ${page + 1} of ${lastPage + 1}`}
+                </span>
+                <button
+                  className={styles.btn}
+                  disabled={page === lastPage}
+                  onClick={() => goTo(page + 1)}
+                >
+                  NEXT
+                </button>
+                <button
+                  className={styles.btn}
+                  disabled={page === lastPage}
+                  onClick={() => goTo(lastPage)}
+                >
+                  LAST
+                </button>
+              </nav>
             )}
           </>
         )}
