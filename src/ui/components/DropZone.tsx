@@ -6,14 +6,15 @@ import { showToast } from './Toast'
 
 const hasFiles = (e: DragEvent): boolean => e.dataTransfer?.types.includes('Files') ?? false
 
-export function DropZone() {
+/** onPlay: called with the first dropped song once it plays (the view page opens it). */
+export function DropZone(props: { onPlay?: (id: string) => void }) {
   const player = usePlayer()
   const [over, setOver] = useState(false)
   // The listeners live for the whole mount (re-adding them each render would reset `depth`
   // mid-drag and flicker the overlay), so they reach the latest player through a ref.
-  const api = useRef(player)
+  const api = useRef({ ...player, onPlay: props.onPlay })
   useEffect(() => {
-    api.current = player
+    api.current = { ...player, onPlay: props.onPlay }
   })
 
   useEffect(() => {
@@ -47,7 +48,9 @@ export function DropZone() {
             showToast(`${file.name}: ${err instanceof Error ? err.message : 'Failed'}`)
           }
         }
-        if (first !== null) await api.current.play(first)
+        if (first === null) return
+        await api.current.play(first)
+        api.current.onPlay?.(first)
       })()
     }
     window.addEventListener('dragenter', onEnter)

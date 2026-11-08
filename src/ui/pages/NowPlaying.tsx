@@ -10,6 +10,7 @@ import { useSettings } from '../../state/SettingsContext'
 import { VisualizerHost } from '../../viz'
 import { formatTime } from '../components/PlayerBar'
 import { ChannelStrip } from '../components/ChannelStrip'
+import { DropZone } from '../components/DropZone'
 import { InfoPanel } from '../components/InfoPanel'
 import { MessageScroller } from '../components/MessageScroller'
 import { SampleBrowser } from '../components/SampleBrowser'
@@ -96,6 +97,11 @@ export function NowPlaying({ id }: { id: string }) {
 
   return (
     <>
+      <DropZone
+        onPlay={(dropped) => {
+          location.hash = formatRoute({ page: 'play', id: dropped, seek: null })
+        }}
+      />
       {entry && <InfoPanel key={`info:${entry.id}`} entry={entry} details={false} />}
       <section className={styles.panel}>
         <h2 className={styles.heading}>{playing ? 'NOW PLAYING' : 'PREVIEW'}</h2>
