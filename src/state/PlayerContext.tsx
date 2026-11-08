@@ -43,6 +43,9 @@ export interface PlayerApi {
   prev(): Promise<void>
   /** Jukebox mode only (no-op in single mode): plays a random song from the jukebox filter, other than the current one, and stays in jukebox mode. */
   random(): Promise<void>
+  /** Session only (starts false). On: a song that ends restarts from 0:00, and the jukebox does not advance (end, fade or length cap). */
+  loop: boolean
+  setLoop(on: boolean): void
 }
 
 const Ctx = createContext<PlayerApi | null>(null)
@@ -72,6 +75,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [manifestTry, setManifestTry] = useState(0)
   const [muteMask, setMuteMask] = useState(0)
   const [mode, setMode] = useState<'single' | 'jukebox'>('single')
+  const [loop, setLoop] = useState(false)
   const queue = useRef<Queue | null>(null)
   const fails = useRef(0)
   /** the Loaded object whose successor was already requested, so each song advances once */
@@ -182,10 +186,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }
 
   // Timers and the 'ended' event read the latest closures through this ref.
-  const live = useRef({ jukeIds, playQueued, jukebox: settings.jukebox })
+  const live = useRef({ jukeIds, playQueued, jukebox: settings.jukebox, loop })
   useEffect(() => {
-    live.current = { jukeIds, playQueued, jukebox: settings.jukebox }
+    live.current = { jukeIds, playQueued, jukebox: settings.jukebox, loop }
   })
+
+  // Loop: restart the song that just ended (the jukebox listener below stands aside).
+  useEffect(
+    () =>
+      engine.on((e) => {
+        if (e.type !== 'ended' || !live.current.loop) return
+        engine.seek({ seconds: 0 })
+        engine.play()
+      }),
+    [engine],
+  )
 
   // Keep the queue in step with the jukebox settings, the favorites and the entry list.
   const { formats, favoritesOnly, shuffle } = settings.jukebox
@@ -205,6 +220,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const timer = setInterval(() => {
       const cur = engine.current
       if (!cur || engine.status !== 'playing' || advancedFrom.current === cur) return
+      if (live.current.loop) return
       const { fade, maxLengthMin } = live.current.jukebox
       const cap = maxLengthMin * 60
       const limit = cap > 0 ? Math.min(cur.durationSec, cap) : cur.durationSec
@@ -214,7 +230,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (secs >= limit - lead && (fade || (cap > 0 && secs >= cap))) advance(lead)
     }, TICK_MS)
     const off = engine.on((e) => {
-      if (e.type === 'ended' && advancedFrom.current !== engine.current) advance(0)
+      if (e.type === 'ended' && !live.current.loop && advancedFrom.current !== engine.current)
+        advance(0)
     })
     return () => {
       clearInterval(timer)
@@ -305,6 +322,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const q = queue.current
       if (mode === 'jukebox' && q) await playQueued(() => q.prev(), 0)
     },
+    loop,
+    setLoop,
     async random() {
       if (mode !== 'jukebox') return
       // A fresh pick per attempt, so a song that fails to load isn't retried.

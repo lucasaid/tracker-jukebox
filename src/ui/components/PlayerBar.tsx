@@ -32,6 +32,8 @@ export function PlayerBar() {
     prev,
     next,
     random,
+    loop,
+    setLoop,
     entries,
     play,
     favorites,
@@ -144,6 +146,16 @@ export function PlayerBar() {
       {entries.length > 1 && (
         <button className={styles.btn} aria-label="Next song" onClick={() => step(1)}>
           <Label text="NEXT" icon="►►" />
+        </button>
+      )}
+      {current && (
+        <button
+          className={`${styles.btn} ${loop ? styles.chipOn : ''}`}
+          aria-label="Loop this song"
+          aria-pressed={loop}
+          onClick={() => setLoop(!loop)}
+        >
+          <Label text="LOOP" icon="↻" />
         </button>
       )}
       {entries.length > 1 && (
