@@ -8,4 +8,7 @@ public/soundfonts
 *.tsbuildinfo
 prompt.md
 trackers/temp_for_sort
+# local-only music (pnpm manifest picks it up; never deployed)
+trackers/private
+scripts/added.private.json
 TODO.md

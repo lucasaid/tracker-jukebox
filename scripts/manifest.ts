@@ -12,11 +12,16 @@ const musicDir = join(root, 'public', 'music')
 const curation = loadCuration()
 const excluded = new Set(curation.exclude)
 // id → ISO date the song first showed up here. Only this script writes it, so `pnpm manage` saves can't drop it.
+// Songs in the gitignored trackers/private/ keep theirs in a gitignored file, so their names never reach git.
 const ADDED_PATH = join(root, 'scripts', 'added.json')
-const rawAdded: unknown = existsSync(ADDED_PATH) ? JSON.parse(readFileSync(ADDED_PATH, 'utf8')) : {}
+const PRIVATE_ADDED_PATH = join(root, 'scripts', 'added.private.json')
+const isPrivate = (id: string): boolean => id.startsWith('private/')
 const added: Record<string, string> = {}
-if (typeof rawAdded === 'object' && rawAdded !== null)
-  for (const [id, v] of Object.entries(rawAdded)) if (typeof v === 'string') added[id] = v
+for (const path of [ADDED_PATH, PRIVATE_ADDED_PATH]) {
+  const raw: unknown = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : {}
+  if (typeof raw === 'object' && raw !== null)
+    for (const [id, v] of Object.entries(raw)) if (typeof v === 'string') added[id] = v
+}
 const now = new Date().toISOString()
 
 const out = (line: string): void => void process.stdout.write(`${line}\n`)
@@ -73,11 +78,18 @@ const manifest: Manifest = {
   entries: entries.sort((a, b) => a.id.localeCompare(b.id)),
 }
 // Stamps for files gone from trackers/ are dropped; excluded files are still on disk, so they keep theirs.
-const kept = Object.entries(added).filter(([id]) => present.has(id))
-writeFileSync(
+const kept = Object.entries(added)
+  .filter(([id]) => present.has(id))
+  .sort(([a], [b]) => a.localeCompare(b))
+const writeStamps = (path: string, list: [string, string][]): void =>
+  writeFileSync(path, `${JSON.stringify(Object.fromEntries(list), null, 2)}\n`)
+writeStamps(
   ADDED_PATH,
-  `${JSON.stringify(Object.fromEntries(kept.sort(([a], [b]) => a.localeCompare(b))), null, 2)}\n`,
+  kept.filter(([id]) => !isPrivate(id)),
 )
+const privateStamps = kept.filter(([id]) => isPrivate(id))
+if (privateStamps.length > 0 || existsSync(PRIVATE_ADDED_PATH))
+  writeStamps(PRIVATE_ADDED_PATH, privateStamps)
 writeFileSync(join(root, 'public', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
 out(
