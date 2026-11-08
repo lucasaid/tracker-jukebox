@@ -7,6 +7,7 @@ import { periodToHz } from './pitch'
 import { createSequencer } from './sequencer'
 
 export { ticksToSeconds } from './midi-synth'
+export { createBeatDetector } from './beat'
 
 export type Interpolation = 'nearest' | 'linear' | 'cubic'
 
@@ -48,6 +49,7 @@ export type Position =
       tempo: number
     }
   | { kind: 'midi'; tick: number; tempo: number }
+  | { kind: 'stream' }
 
 export interface Snapshot {
   frame: number

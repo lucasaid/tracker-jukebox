@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { detectFormat, parseFile } from '../formats'
-import type { MidiTarget, ParsedFile } from '../formats'
+import type { Format, MidiTarget, ParsedFile, StreamFile, StreamFormat } from '../formats'
 import { computeLength } from '../engine'
 import type { SeekTarget } from '../engine'
 import { AudioEngine } from '../audio/AudioEngine'
-import type { EngineStatus } from '../audio/AudioEngine'
+import type { EngineStatus, SongSource } from '../audio/AudioEngine'
 import { describe, loadManifest } from '../library/manifest'
 import { filterEntries, sortEntries, EMPTY_FILTERS } from '../library/search'
 import { createQueue } from '../library/shuffle'
@@ -35,7 +35,7 @@ export interface PlayerApi {
   solo(ch: number | null): void // ch → mute all others; null → unmute all
   favorites: ReadonlySet<string>
   toggleFavorite(id: string): void // local ids are ignored
-  /** Rejects with Error('File too large (max 16 MB)') | Error('Not a supported music file') | the parse error. Never uploads. */
+  /** Rejects with Error('File too large (max 16 MB)') (MP3/FLAC: 'max 200 MB') | Error('Not a supported music file') | the parse error. Never uploads. */
   addLocal(file: File): Promise<ManifestEntry>
   /** Builds the Queue from settings.jukebox and entries, sets mode 'jukebox' and plays the first song. Rejects Error('No songs match the jukebox filter'). */
   startJukebox(): Promise<void>
@@ -52,6 +52,31 @@ const Ctx = createContext<PlayerApi | null>(null)
 const DEBUG = new URLSearchParams(location.search).get('debug') === '1'
 const MANIFEST_URL = './manifest.json'
 const MAX_LOCAL_BYTES = 16 * 1024 * 1024
+const MAX_STREAM_BYTES = 200 * 1024 * 1024
+/** Enough for detectFormat (MOD magic sits at 1080; an ID3 tag usually ends well before this). */
+const HEAD_BYTES = 64 * 1024
+
+/** A dropped file. `url` is the object URL a streamed (MP3/FLAC) file plays from. */
+interface Local {
+  entry: ManifestEntry
+  parsed: ParsedFile
+  url?: string
+}
+
+const asStream = (f: Format): StreamFormat | null => (f === 'mp3' || f === 'flac' ? f : null)
+
+/** A manifest entry as the StreamFile the engine needs; the manifest already has its tags. */
+const streamOf = (e: ManifestEntry, format: StreamFormat): StreamFile => ({
+  kind: 'stream',
+  format,
+  title: e.title,
+  artist: e.artist,
+  tracker: '',
+  message: '',
+  durationSec: e.durationSec,
+  sampleRate: 0, // not in the manifest, and nothing reads it during playback
+  channels: e.channels,
+})
 const FAIL_LIMIT = 3
 const TICK_MS = 250
 const FADE_LEAD_SEC = 4
@@ -66,9 +91,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<EngineStatus>('locked')
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [manifestEntries, setEntries] = useState<ManifestEntry[]>([])
-  const [locals, setLocals] = useState<{ entry: ManifestEntry; parsed: ParsedFile }[]>([])
+  const [locals, setLocals] = useState<Local[]>([])
   // The ref lets play() see a file added in the same tick (drop, then play).
-  const localsRef = useRef<{ entry: ManifestEntry; parsed: ParsedFile }[]>([])
+  const localsRef = useRef<Local[]>([])
   const [favorites, setFavorites] = useState(() => loadFavorites())
   const entries = [...manifestEntries, ...locals.map((l) => l.entry)]
   const [manifestError, setManifestError] = useState<LoadError | null>(null)
@@ -146,7 +171,16 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // A dropped MIDI is never re-parsed, so the MT-32 toggle sets its target directly.
       const parsed =
         local?.parsed.kind === 'midi' && target ? { ...local.parsed, target } : local?.parsed
-      await engine.load(parsed ? { id, parsed } : { id, url: entry.url ?? '' }, {
+      const streamed = asStream(entry.format)
+      const source: SongSource =
+        parsed?.kind === 'stream' && local?.url
+          ? { id, url: local.url, stream: parsed }
+          : parsed
+            ? { id, parsed }
+            : streamed
+              ? { id, url: entry.url ?? '', stream: streamOf(entry, streamed) }
+              : { id, url: entry.url ?? '' }
+      await engine.load(source, {
         seek: opts?.seek,
         fadeSec: opts?.fadeSec,
         midiTarget: target,
@@ -334,9 +368,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       await playQueued(pick, 0)
     },
     async addLocal(file) {
-      if (file.size > MAX_LOCAL_BYTES) throw new Error('File too large (max 16 MB)')
+      const format = detectFormat(new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer()))
+      if (format === null) throw new Error('Not a supported music file')
+      const streamed = asStream(format) !== null
+      if (file.size > (streamed ? MAX_STREAM_BYTES : MAX_LOCAL_BYTES))
+        throw new Error(`File too large (max ${streamed ? 200 : 16} MB)`)
+      // ponytail: MP3/FLAC are read whole just to parse the header; read only the tag + first frames if 200 MB drops feel slow
       const bytes = new Uint8Array(await file.arrayBuffer())
-      if (detectFormat(bytes) === null) throw new Error('Not a supported music file')
       const parsed = parseFile(bytes)
       const { seconds, loops } = computeLength(parsed)
       const entry = describe(parsed, {
@@ -348,7 +386,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         loops,
         addedAt: new Date().toISOString(),
       })
-      localsRef.current = [...localsRef.current, { entry, parsed }]
+      // ponytail: object URLs live for the session (never revoked); revoke on removal if locals become removable
+      const url = parsed.kind === 'stream' ? URL.createObjectURL(file) : undefined
+      localsRef.current = [...localsRef.current, { entry, parsed, url }]
       setLocals(localsRef.current)
       return entry
     },

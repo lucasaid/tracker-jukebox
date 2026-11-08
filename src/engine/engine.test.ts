@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Fx, NOTE_NONE } from '../formats'
 import type { Cell, MidiEvent, MidiSong, Pattern, Song, SoundBank, Zone } from '../formats'
-import { computeLength, createMidiPlayer, createTrackerPlayer } from './index'
+import { computeLength, createBeatDetector, createMidiPlayer, createTrackerPlayer } from './index'
 import { Stage, createEnv, releaseEnv, startEnv, stepEnv } from './midi-synth'
 import { createChannel, runTick, startRow } from './effects'
 import { createVoice, mixVoice } from './mixer'
@@ -390,5 +390,24 @@ describe('MIDI synth', () => {
     }
     expect(play(0)).toBe(2)
     expect(play(1)).toBe(1)
+  })
+})
+
+describe('createBeatDetector', () => {
+  const DT = 1 / 60
+  const run = (energyAt: (sec: number) => number, sec: number): number => {
+    const beat = createBeatDetector()
+    let beats = 0
+    for (let i = 0; i < sec / DT; i++) if (beat(energyAt(i * DT), DT)) beats++
+    return beats
+  }
+  it('fires once per kick (energy steps every 0.5 s)', () => {
+    const kicks = run((t) => (t % 0.5 < 0.05 ? 0.1 : 0.01), 5)
+    expect(kicks).toBeGreaterThanOrEqual(9)
+    expect(kicks).toBeLessThanOrEqual(10)
+  })
+  it('never fires on constant energy or silence', () => {
+    expect(run(() => 0.05, 5)).toBe(0)
+    expect(run(() => 0, 5)).toBe(0)
   })
 })

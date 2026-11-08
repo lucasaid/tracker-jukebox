@@ -70,7 +70,9 @@ export function NowPlaying({ id }: { id: string }) {
       const pos = snap?.pos
       if (pos?.kind === 'tracker')
         setWhere(`order ${pos.order} · row ${pos.row} · speed ${pos.speed}`)
-      else if (pos) setWhere(`${Math.round(pos.tempo)} BPM · ${formatTime(snap?.seconds ?? 0)}`)
+      else if (pos?.kind === 'midi')
+        setWhere(`${Math.round(pos.tempo)} BPM · ${formatTime(snap?.seconds ?? 0)}`)
+      else if (pos) setWhere(formatTime(snap?.seconds ?? 0))
     }, 250)
     return () => clearInterval(timer)
   }, [engine])

@@ -1,12 +1,14 @@
 import { parseFile, parseSoundBank } from '../formats'
+import { NOTE_NONE } from '../formats'
 import type {
   MidiTarget,
   ParseError,
   ParsedFile,
   SoundBank,
+  StreamFile,
   UnsupportedFormatError,
 } from '../formats'
-import { DEFAULT_PLAYER_OPTIONS, computeLength } from '../engine'
+import { DEFAULT_PLAYER_OPTIONS, SCOPE_LEN, computeLength, createBeatDetector } from '../engine'
 import type { PlayerOptions, PlayerStats, SeekTarget, Snapshot } from '../engine'
 import { fetchBytes } from '../net'
 import type { LoadError } from '../net'
@@ -27,7 +29,11 @@ export class PlaybackError extends Error {
   }
 }
 
-export type SongSource = { id: string; url: string } | { id: string; parsed: ParsedFile }
+export type SongSource =
+  | { id: string; url: string }
+  | { id: string; parsed: ParsedFile }
+  /** played by the deck's <audio>, never fetched by us */
+  | { id: string; url: string; stream: StreamFile }
 export interface Loaded {
   id: string
   song: ParsedFile
@@ -42,6 +48,8 @@ export type EngineEvent =
   | { type: 'stats'; stats: PlayerStats }
 
 const KEPT_SNAPSHOTS = 32
+/** Streamed-channel RMS → ChannelState.volume; music sits around 0.1–0.3 RMS. */
+const STREAM_VOLUME_GAIN = 3
 
 interface Stamped {
   at: number
@@ -59,9 +67,31 @@ interface Deck {
   lastPick: Stamped | null
   hasBank: boolean
   waiting: { id: string; ok: () => void; fail: (e: Error) => void } | null
+  /** MP3/FLAC path: the deck's own <audio>, feeding `gain` beside the worklet */
+  media: HTMLAudioElement
+  /** true while `media` (not the worklet) holds this deck's song */
+  streaming: boolean
+  /** L/R analysers on `media` only, for the snapshot scopes */
+  scopeL: AnalyserNode
+  scopeR: AnalyserNode
+  bufL: Float32Array<ArrayBuffer>
+  bufR: Float32Array<ArrayBuffer>
+  /** filled by latest() while streaming; preallocated */
+  streamSnap: Snapshot
+  beat: (energy: number, dtSec: number) => boolean
+  lastStreamSec: number
 }
 
 const abortError = (): DOMException => new DOMException('Load aborted', 'AbortError')
+
+const mediaMessage = (media: HTMLAudioElement): string =>
+  media.error?.message || 'This browser could not play the file'
+
+const meanSquare = (buf: Float32Array): number => {
+  let sum = 0
+  for (const v of buf) sum += v * v
+  return sum / buf.length
+}
 
 export class AudioEngine {
   private ctx: AudioContext | null = null
@@ -149,6 +179,29 @@ export class AudioEngine {
       })
       const gain = ctx.createGain()
       node.connect(gain).connect(analyser)
+      const media = new Audio()
+      media.preload = 'auto'
+      const source = ctx.createMediaElementSource(media)
+      source.connect(gain)
+      // A mono file is up-mixed to both outputs, so L and R scopes both show it.
+      const split = ctx.createChannelSplitter(2)
+      source.connect(split)
+      const scopeL = ctx.createAnalyser()
+      const scopeR = ctx.createAnalyser()
+      scopeL.fftSize = SCOPE_LEN
+      scopeR.fftSize = SCOPE_LEN
+      split.connect(scopeL, 0)
+      split.connect(scopeR, 1)
+      const bufL = new Float32Array(SCOPE_LEN)
+      const bufR = new Float32Array(SCOPE_LEN)
+      const side = (pan: number) => ({
+        active: false,
+        note: NOTE_NONE,
+        ins: 0,
+        volume: 0,
+        pan,
+        triggered: false,
+      })
       const deck: Deck = {
         node,
         gain,
@@ -158,8 +211,32 @@ export class AudioEngine {
         lastPick: null,
         hasBank: false,
         waiting: null,
+        media,
+        streaming: false,
+        scopeL,
+        scopeR,
+        bufL,
+        bufR,
+        streamSnap: {
+          frame: 0,
+          seconds: 0,
+          pos: { kind: 'stream' },
+          ch: [side(-1), side(1)],
+          scopes: [bufL, bufR],
+        },
+        beat: createBeatDetector(),
+        lastStreamSec: 0,
       }
       node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorklet(deck, e.data)
+      media.addEventListener('ended', () => {
+        if (deck.streaming && deck.loaded?.id === deck.activeId) this.onEnded(deck)
+      })
+      media.addEventListener('error', () => {
+        // Only a song that already loaded; errors while opening are handled by openMedia.
+        if (!deck.streaming || deck.loaded?.id !== deck.activeId || deck !== this.deck) return
+        if (this.state === 'playing') this.setStatus('paused')
+        this.emit({ type: 'error', error: new PlaybackError(mediaMessage(media), deck.activeId) })
+      })
       this.decks.push(deck)
       if (this.debug) this.send(deck, { type: 'debug', enabled: true })
     }
@@ -180,9 +257,7 @@ export class AudioEngine {
         if (deck.snapshots.length > KEPT_SNAPSHOTS) deck.snapshots.shift()
         break
       case 'ended':
-        if (!audible) break // the song fading out underneath a crossfade
-        if (this.state === 'playing') this.setStatus('paused')
-        this.emit({ type: 'ended', id: m.id })
+        this.onEnded(deck)
         break
       case 'error': {
         const error = new PlaybackError(m.message, m.id)
@@ -197,6 +272,51 @@ export class AudioEngine {
         if (audible) this.emit({ type: 'stats', stats: m.stats })
         break
     }
+  }
+
+  private onEnded(deck: Deck): void {
+    const id = deck.activeId
+    if (deck !== this.deck || id === null) return // the song fading out underneath a crossfade
+    if (this.state === 'playing') this.setStatus('paused')
+    this.emit({ type: 'ended', id })
+  }
+
+  /** Points the deck's <audio> at `url` and waits for its metadata. Rejects PlaybackError or AbortError. */
+  private openMedia(deck: Deck, url: string, signal: AbortSignal, id: string): Promise<void> {
+    const media = deck.media
+    return new Promise<void>((ok, fail) => {
+      const done = (): void => {
+        media.removeEventListener('loadedmetadata', onMeta)
+        media.removeEventListener('error', onError)
+        signal.removeEventListener('abort', onAbort)
+      }
+      const onMeta = (): void => {
+        done()
+        ok()
+      }
+      const onError = (): void => {
+        done()
+        fail(new PlaybackError(mediaMessage(media), id))
+      }
+      const onAbort = (): void => {
+        done()
+        fail(abortError())
+      }
+      media.addEventListener('loadedmetadata', onMeta)
+      media.addEventListener('error', onError)
+      signal.addEventListener('abort', onAbort)
+      media.src = url
+      media.load()
+    })
+  }
+
+  /** Stops and empties the deck's <audio> if it holds the song. */
+  private stopMedia(deck: Deck): void {
+    if (!deck.streaming) return
+    deck.streaming = false
+    deck.media.pause()
+    deck.media.removeAttribute('src')
+    deck.media.load()
   }
 
   /** Fetches and parses the SoundFont on first use (not tied to any load's abort signal, so a
@@ -239,6 +359,7 @@ export class AudioEngine {
       back.gain.gain.cancelScheduledValues(0)
       back.gain.gain.value = 0
       this.send(back, { type: 'unload' })
+      this.stopMedia(back)
       back.loaded = null
       back.activeId = null
     }
@@ -262,7 +383,8 @@ export class AudioEngine {
     let mine: Deck['waiting'] = null
     try {
       let song: ParsedFile
-      if ('parsed' in src) song = src.parsed
+      if ('stream' in src) song = src.stream
+      else if ('parsed' in src) song = src.parsed
       else {
         const bytes = await fetchBytes(src.url, { signal: abort.signal })
         if (stale()) throw abortError()
@@ -272,7 +394,7 @@ export class AudioEngine {
         await this.ensureBank(src.id)
         if (stale()) throw abortError()
       }
-      const durationSec = computeLength(song).seconds
+      let durationSec = computeLength(song).seconds
 
       // Crossfade onto the idle deck only while something is actually audible.
       this.settleFade()
@@ -283,15 +405,36 @@ export class AudioEngine {
       target.activeId = src.id
       target.snapshots = []
       target.lastPick = null
-      const ready = new Promise<void>((ok, fail) => {
-        mine = { id: src.id, ok, fail }
-        target.waiting = mine
-        abort.signal.addEventListener('abort', () => fail(abortError()))
-      })
-      this.send(target, { type: 'load', id: src.id, song, options: this.options, seek: opts?.seek })
-      await ready
-      if (target.waiting === mine) target.waiting = null
-      if (stale()) throw abortError()
+      if ('stream' in src) {
+        this.send(target, { type: 'unload' })
+        target.streaming = true
+        await this.openMedia(target, src.url, abort.signal, src.id)
+        if (stale()) throw abortError()
+        const media = target.media
+        if (Number.isFinite(media.duration) && media.duration > 0) durationSec = media.duration
+        song = { ...src.stream, durationSec }
+        const seek = opts?.seek
+        if (seek && 'seconds' in seek) media.currentTime = seek.seconds
+        target.lastStreamSec = media.currentTime
+        target.beat = createBeatDetector()
+      } else {
+        this.stopMedia(target)
+        const ready = new Promise<void>((ok, fail) => {
+          mine = { id: src.id, ok, fail }
+          target.waiting = mine
+          abort.signal.addEventListener('abort', () => fail(abortError()))
+        })
+        this.send(target, {
+          type: 'load',
+          id: src.id,
+          song,
+          options: this.options,
+          seek: opts?.seek,
+        })
+        await ready
+        if (target.waiting === mine) target.waiting = null
+        if (stale()) throw abortError()
+      }
       target.loaded = { id: src.id, song, durationSec }
 
       const old = this.deck
@@ -310,7 +453,11 @@ export class AudioEngine {
         target.gain.gain.value = 1
       }
       this.setStatus('paused')
-      if (opts?.autoplay !== false) this.play()
+      if (opts?.autoplay !== false) {
+        // A refused <audio> start (e.g. iOS outside a gesture) fails the load, so the jukebox skips.
+        if (target.streaming) await this.startMedia(target)
+        else this.play()
+      }
       return target.loaded
     } catch (err) {
       for (const d of this.decks) if (d.waiting === mine) d.waiting = null
@@ -324,19 +471,51 @@ export class AudioEngine {
     }
   }
 
-  play(): void {
-    if (!this.current) return
+  /** Starts the deck's <audio>. Rejects PlaybackError if the browser refuses. */
+  private async startMedia(deck: Deck): Promise<void> {
     void this.ctx?.resume()
-    this.send(this.deck, { type: 'play' })
+    this.setStatus('playing')
+    try {
+      await deck.media.play()
+    } catch (err) {
+      if (deck === this.deck && this.state === 'playing') this.setStatus('paused')
+      throw new PlaybackError(
+        err instanceof Error ? err.message : 'Playback was refused',
+        deck.activeId,
+      )
+    }
+  }
+
+  play(): void {
+    const deck = this.deck
+    if (!this.current || !deck) return
+    if (deck.streaming) {
+      this.startMedia(deck).catch((error: unknown) => {
+        if (error instanceof PlaybackError) this.emit({ type: 'error', error })
+      })
+      return
+    }
+    void this.ctx?.resume()
+    this.send(deck, { type: 'play' })
     this.setStatus('playing')
   }
   pause(): void {
     if (!this.current) return
-    for (const d of this.decks) this.send(d, { type: 'pause' })
+    for (const d of this.decks) {
+      this.send(d, { type: 'pause' })
+      if (d.streaming) d.media.pause()
+    }
     this.setStatus('paused')
   }
+  /** `{ order }` does nothing for a streamed song. */
   seek(to: SeekTarget): void {
-    if (this.current) this.send(this.deck, { type: 'seek', to })
+    const deck = this.deck
+    if (!this.current || !deck) return
+    if (!deck.streaming) this.send(deck, { type: 'seek', to })
+    else if ('seconds' in to) {
+      deck.media.currentTime = to.seconds
+      deck.lastStreamSec = to.seconds
+    }
   }
   setOptions(o: Partial<PlayerOptions>): void {
     this.options = { ...this.options, ...o }
@@ -369,6 +548,7 @@ export class AudioEngine {
     const ctx = this.ctx
     const deck = this.deck
     if (!ctx || !deck?.loaded) return null
+    if (deck.streaming) return { snap: this.streamSnapshot(ctx, deck), song: deck.loaded.song }
     const horizonSec = ctx.currentTime - (ctx.outputLatency || ctx.baseLatency || 0)
     let pick: Stamped | undefined
     for (let i = deck.snapshots.length - 1; i >= 0; i--) {
@@ -399,6 +579,29 @@ export class AudioEngine {
     return { snap: pick.snap, song: deck.loaded.song }
   }
 
+  /** Overwrites the deck's preallocated snapshot from its <audio> and L/R analysers. */
+  private streamSnapshot(ctx: AudioContext, deck: Deck): Snapshot {
+    const s = deck.streamSnap
+    const sec = deck.media.currentTime
+    const dtSec = sec - deck.lastStreamSec
+    deck.lastStreamSec = sec
+    s.seconds = sec
+    s.frame = Math.round(sec * ctx.sampleRate)
+    deck.scopeL.getFloatTimeDomainData(deck.bufL)
+    deck.scopeR.getFloatTimeDomainData(deck.bufR)
+    const msL = meanSquare(deck.bufL)
+    const msR = meanSquare(deck.bufR)
+    // Only moving time counts: paused, or a seek backwards, never makes a beat.
+    const beat = dtSec > 0 && dtSec < 1 && deck.beat((msL + msR) / 2, dtSec)
+    const playing = !deck.media.paused
+    s.ch.forEach((c, i) => {
+      c.active = playing
+      c.volume = Math.min(1, Math.sqrt(i === 0 ? msL : msR) * STREAM_VOLUME_GAIN)
+      c.triggered = beat
+    })
+    return s
+  }
+
   on(listener: (e: EngineEvent) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
@@ -410,6 +613,7 @@ export class AudioEngine {
     this.listeners.clear()
     for (const d of this.decks) {
       d.node.port.close()
+      this.stopMedia(d)
       d.loaded = null
     }
     this.decks = []
