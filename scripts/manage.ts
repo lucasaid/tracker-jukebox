@@ -95,6 +95,7 @@ function preview(id: string, midiTarget: 'gm' | 'mt32'): Uint8Array {
   const song = parseFile(new Uint8Array(readFileSync(path)), { midiTarget })
   let player
   if (song.kind === 'tracker') player = createTrackerPlayer(song, PREVIEW_HZ)
+  else if (song.kind === 'stream') throw new Error('MP3/FLAC preview is not supported')
   else {
     bank ??= parseSoundBank(new Uint8Array(readFileSync(BANK_PATH)))
     player = createMidiPlayer(song, bank, PREVIEW_HZ)

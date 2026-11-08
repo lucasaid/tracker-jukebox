@@ -1682,6 +1682,120 @@ Phase 0 was done as a user-requested exception, and it covers all of P1.
   2. No page scrolls horizontally at 375px.
 - `chore(deploy): static hosting config`
 
+### MP3 / FLAC (post-plan, user-requested 2026-11-08)
+
+**User decisions:**
+
+- **Streamed, not decoded:** MP3/FLAC play through an `<audio>` element per deck (`MediaElementAudioSourceNode` → the deck's `GainNode` → the shared analyser), not through the worklet. The browser does the decoding; no new dependency. Seek, LOOP, jukebox fades and crossfades must keep working through the deck gains.
+- **Visualizers:** Pattern and Channels are disabled for streamed songs. Every other visualizer works: the engine builds a `Snapshot` for streamed songs on the main thread with two channels (L pan −1, R pan +1) whose scopes come from a per-deck stereo split, so VU and Vectorscope (`mixLR`) need no change.
+- **Beat detection:** streamed songs set `ChannelState.triggered` on a jump in energy, so Tunnel, Particles, Plasma, Starfield and Copper pulse.
+- **Artist:** a new `artist` field on `ManifestEntry` (`''` for trackers and MIDI).
+- **Drop limit:** 200 MB for MP3/FLAC; trackers and MIDI keep 16 MB.
+- **Library:** MP3/FLAC are expected mainly in the gitignored `trackers/private/`, so their tests skip when the files are missing.
+
+**Test files** (`trackers/private/`, local only; values from `ffprobe`):
+
+| File                                  | Format              | Title                        | Artist   | Duration | Rate / ch    |
+| ------------------------------------- | ------------------- | ---------------------------- | -------- | -------- | ------------ |
+| `01 - Abbath - To War!.mp3`           | MP3, ID3v2.4 + APIC | `To War!`                    | `Abbath` | 335.20 s | 44100 Hz / 2 |
+| `01. LOST IN PARADISE feat.AKLO.flac` | FLAC                | `LOST IN PARADISE feat.AKLO` | `ALI`    | 328.96 s | 44100 Hz / 2 |
+
+**Contract changes:**
+
+```ts
+// formats/song.ts
+export type Format = 'mod' | 'stm' | 's3m' | 'mtm' | '669' | 'midi' | 'mp3' | 'flac'
+export type StreamFormat = 'mp3' | 'flac'
+export type TrackerFormat = Exclude<Format, 'midi' | StreamFormat>
+export const FORMATS: readonly Format[] = ['mod', 's3m', 'stm', '669', 'mtm', 'midi', 'mp3', 'flac']
+/** Header-only description of a streamed file; the audio itself is never decoded by us. */
+export interface StreamFile {
+  kind: 'stream'
+  format: StreamFormat
+  title: string // ID3 TIT2 / Vorbis TITLE, '' if none
+  artist: string // ID3 TPE1 / Vorbis ARTIST, '' if none
+  tracker: '' // keeps describe() uniform
+  message: '' // same
+  durationSec: number
+  sampleRate: number
+  channels: number
+}
+export type ParsedFile = Song | MidiSong | StreamFile
+
+// formats/index.ts
+// detectFormat: 'fLaC' at 0 → 'flac'; 'ID3' at 0, or an MPEG audio frame header at 0
+// (0xFF, top 3 bits of byte 1 set, layer bits = Layer III) → 'mp3'.
+// parseFile: mp3/flac → header parse (formats/stream.ts). ParseError if there is no
+// STREAMINFO (FLAC) or no frame header after the ID3 tag (MP3).
+
+// engine/index.ts
+export type Position = /* existing */ { kind: 'stream' }
+// computeLength(stream) → { seconds: durationSec, loops: false }
+export function createBeatDetector(): (energy: number, dtSec: number) => boolean // engine/beat.ts, pure
+
+// library/manifest.ts
+interface ManifestEntry {
+  /* existing */ artist: string
+}
+
+// audio/AudioEngine.ts
+export type SongSource =
+  | { id: string; url: string }
+  | { id: string; parsed: ParsedFile }
+  | { id: string; url: string; stream: StreamFile } // played by the deck's <audio>, never fetched by us
+
+// state/PlayerContext.tsx: addLocal rejects Error('File too large (max 200 MB)') for MP3/FLAC.
+
+// viz/types.ts
+interface VisualizerDef {
+  /* existing */ streams?: false
+} // false → unavailable for streamed songs
+```
+
+**Parsing details (P29):**
+
+- **ID3v2.3/2.4:** synchsafe tag size (v2.4 frame sizes synchsafe too, v2.3 plain); `TIT2`, `TPE1`; text encodings 0 Latin-1, 1 UTF-16 with BOM, 2 UTF-16BE, 3 UTF-8; skip other frames (APIC can be megabytes). An ID3v2 footer and ID3v1 are ignored.
+- **MP3 duration:** the first frame header after the tag gives version, layer, sample rate, channel mode and bitrate. A `Xing`/`Info` frame count (or `VBRI`) → frames × samples-per-frame / rate. Otherwise CBR: (bytes after the tag, minus a trailing 128-byte `TAG`) × 8 / bitrate. Expected within ±1 s of `ffprobe`.
+- **FLAC:** `STREAMINFO` (rate 20 bits, channels 3 bits + 1, total samples 36 bits) → exact duration; `VORBIS_COMMENT` (little-endian lengths, `KEY=value`, keys case-insensitive) → `TITLE`, `ARTIST`.
+
+**Streaming details (P30):**
+
+- Each `Deck` also gets `media: HTMLAudioElement` + `MediaElementAudioSourceNode` (into `deck.gain`) and a `ChannelSplitter` into two `AnalyserNode`s (`fftSize = SCOPE_LEN`). Created once in `create()`.
+- `load()` with a `stream` source: unload the deck's worklet, set `media.src`, wait for `loadedmetadata` (`error` → `PlaybackError`), take `durationSec` from `media.duration` when finite, apply `seek.seconds`. A tracker/MIDI load into a deck that held a stream pauses and clears `media.src`.
+- `play`/`pause`/`seek` act on the front deck's `media` when it holds a stream; `{ order }` seeks are ignored. `media`'s `ended` follows the same audible-deck rule as the worklet's `ended`.
+- `latest()` for a stream deck fills a preallocated `Snapshot`: `seconds = media.currentTime`, `pos = { kind: 'stream' }`, `ch` = L/R (`note` −1, `ins` 0, `volume` = RMS clamped to 0..1, `active` while playing), `scopes` from the two analysers, `triggered` on both from the beat detector fed with the mean RMS².
+- **Beat detector:** true when energy > 1.4 × its ~1 s moving average, above a small floor, and ≥ 120 ms since the last beat.
+- `muteMask`, interpolation and stereo separation don't apply to streams.
+- ponytail: `media.play()` outside a user gesture (jukebox advance) may be refused on iOS; if it is, the engine reports a `PlaybackError` and the jukebox skips as for a failed load.
+
+**P29 · MP3/FLAC formats and manifest**
+
+- **Scope:** `formats/song.ts`, `formats/index.ts`, new `formats/stream.ts`, `computeLength` in `engine/index.ts`, `library/manifest.ts` (`artist`, validation, `describe`), `formats.test.ts`, `library.test.ts`. `scripts/render.ts`, `scripts/compare.ts` and `scripts/manage.ts` print/skip streamed files instead of rendering them. Other files may get type-only guards (≤ 3 lines each) so `tsc` passes with the wider `ParsedFile`; streams are not yet playable in the app.
+- **Acceptance:**
+  1. Tests (synthetic bytes, always run): `detectFormat` → `'flac'` / `'mp3'` for `fLaC`, `ID3` and bare-frame headers; the ID3 text encodings 0–3; a Xing frame count; a CBR estimate; a missing STREAMINFO throws `ParseError`.
+  2. Tests on the two test files (`it.skipIf` when missing): the table above, duration within ±1 s (MP3) and ±0.01 s (FLAC).
+  3. `pnpm manifest` lists both files as `OK private/…` and still reports the trackers as before.
+- `feat(formats): MP3 and FLAC header parsing`
+
+**P30 · Streamed playback**
+
+- **Scope:** `AudioEngine.ts` (stream decks, snapshots), new `engine/beat.ts` + `Position` kind in `engine/index.ts`, `audio/worklet.ts` (rejects a stream song), `PlayerContext.tsx` (stream sources for manifest and local entries, object URLs, the 200 MB limit), `engine.test.ts` (beat detector).
+- **Acceptance:**
+  1. Test: the beat detector fires on a synthetic kick pattern (energy steps every 0.5 s) and not on constant energy.
+  2. Both test files play, pause, seek with the bar and loop with LOOP; the elapsed time follows.
+  3. In the jukebox with fade on, a tracker → MP3 → FLAC run crossfades both ways.
+  4. Dropping the 41 MB FLAC plays it; a 17 MB tracker-named junk file is still rejected.
+- `feat(audio): stream MP3 and FLAC through the decks`
+
+**P31 · MP3/FLAC in the UI and visualizers**
+
+- **Scope:** `viz/types.ts`, `viz/pattern.ts` + `viz/channels.ts` (`streams: false`), `VisualizerHost.tsx` (draws Scope instead of a `streams: false` visualizer), `VizPicker.tsx` (those chips disabled for a streamed song), `InfoPanel.tsx` + `VizFrame.tsx` title card (artist), `NowPlaying.tsx` (no SAMPLES tab, no channel strip, no preview fetch, time-only position), the Media Session artist in `PlayerContext.tsx`.
+- **Acceptance:**
+  1. Browse shows MP3/FLAC chips; filtering by them lists the two test files with title, artist and length.
+  2. While an MP3 plays, Pattern and Channels are greyed out in the picker; VU, Vectorscope and the beat-pulse visualizers move with the music.
+  3. The fullscreen title card and the macOS media overlay show the artist.
+- `feat(ui): MP3 and FLAC in the browser, views and visualizers`
+
 **Later (unscheduled; requires a new plan):** MT-32 ROM drop-in (Munt→WASM vs our own synth), and an OPL3 "sound card" mode.
 
 ## Verification (whole project, after P28)

@@ -18,6 +18,8 @@ export interface ManifestEntry {
   sampleNames: string[]
   message: string
   midiTarget: MidiTarget | null
+  /** ID3 / Vorbis artist for MP3 and FLAC; '' for trackers and MIDI */
+  artist: string
   /** ISO 8601: when the song first appeared in the manifest (scripts/added.json), or when it was dropped */
   addedAt: string
 }
@@ -50,6 +52,7 @@ function isEntry(u: unknown): u is ManifestEntry {
     u['sampleNames'].every((n) => typeof n === 'string') &&
     typeof u['message'] === 'string' &&
     (u['midiTarget'] === null || u['midiTarget'] === 'gm' || u['midiTarget'] === 'mt32') &&
+    typeof u['artist'] === 'string' &&
     typeof u['addedAt'] === 'string'
   )
 }
@@ -90,8 +93,10 @@ export function describe(
     title: title === '' ? meta.file.replace(/\.[^.]*$/, '') : title,
     tracker: parsed.tracker,
     channels: isMidi ? parsed.channelsUsed.length : parsed.channels,
-    sampleNames: isMidi ? [] : parsed.samples.map((x) => x.name).filter((n) => n !== ''),
+    sampleNames:
+      parsed.kind === 'tracker' ? parsed.samples.map((x) => x.name).filter((n) => n !== '') : [],
     message: parsed.message,
     midiTarget: isMidi ? parsed.target : null,
+    artist: parsed.kind === 'stream' ? parsed.artist : '',
   }
 }

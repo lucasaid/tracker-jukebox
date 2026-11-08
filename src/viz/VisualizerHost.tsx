@@ -81,7 +81,11 @@ function stillSnapshot(song: ParsedFile): Snapshot {
             speed: song.initialSpeed,
             tempo: song.initialTempo,
           }
-        : { kind: 'midi', tick: 0, tempo: 6e7 / (song.tempoMap[0]?.usPerBeat ?? 500000) },
+        : {
+            kind: 'midi',
+            tick: 0,
+            tempo: song.kind === 'midi' ? 6e7 / (song.tempoMap[0]?.usPerBeat ?? 500000) : 0,
+          },
     ch: Array.from({ length: n }, () => ({
       active: false,
       note: NOTE_NONE,

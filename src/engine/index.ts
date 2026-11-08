@@ -264,6 +264,7 @@ export function computeLength(
   song: ParsedFile,
   maxSeconds = 1800,
 ): { seconds: number; loops: boolean; capped: boolean } {
+  if (song.kind === 'stream') return { seconds: song.durationSec, loops: false, capped: false }
   if (song.kind === 'midi') {
     const last = song.events[song.events.length - 1]
     const seconds = ticksToSeconds(song, last?.tick ?? 0) + 1

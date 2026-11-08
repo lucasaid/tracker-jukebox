@@ -1,9 +1,11 @@
 // Shared data model for every parsed file. See docs/PLAN.md → Contracts → src/formats.
 
-export type Format = 'mod' | 'stm' | 's3m' | 'mtm' | '669' | 'midi'
+export type Format = 'mod' | 'stm' | 's3m' | 'mtm' | '669' | 'midi' | 'mp3' | 'flac'
+/** Played by the browser through an <audio> element; we only read the header. */
+export type StreamFormat = 'mp3' | 'flac'
 /** Also selects the effect quirks in the engine. */
-export type TrackerFormat = Exclude<Format, 'midi'>
-export const FORMATS: readonly Format[] = ['mod', 's3m', 'stm', '669', 'mtm', 'midi']
+export type TrackerFormat = Exclude<Format, 'midi' | StreamFormat>
+export const FORMATS: readonly Format[] = ['mod', 's3m', 'stm', '669', 'mtm', 'midi', 'mp3', 'flac']
 export type MidiTarget = 'gm' | 'mt32'
 
 /** Notes are otherwise 0..119, C-0 = 0, C-4 = 48. */
@@ -162,4 +164,20 @@ export interface Zone {
   exclusiveClass: number
 }
 
-export type ParsedFile = Song | MidiSong
+/** Header-only description of a streamed file; the audio itself is never decoded by us. */
+export interface StreamFile {
+  kind: 'stream'
+  format: StreamFormat
+  /** ID3 TIT2 / Vorbis TITLE, '' if none */
+  title: string
+  /** ID3 TPE1 / Vorbis ARTIST, '' if none */
+  artist: string
+  /** always '': keeps describe() uniform */
+  tracker: ''
+  message: ''
+  durationSec: number
+  sampleRate: number
+  channels: number
+}
+
+export type ParsedFile = Song | MidiSong | StreamFile

@@ -6,6 +6,7 @@ import { parseMod } from './mod'
 import { parseMtm } from './mtm'
 import { parseS3m } from './s3m'
 import { parseStm } from './stm'
+import { id3Length, mp3Frame, parseFlac, parseMp3 } from './stream'
 import type { Format, MidiTarget, ParsedFile, SoundBank } from './song'
 
 export * from './song'
@@ -21,6 +22,8 @@ export function detectFormat(bytes: Uint8Array): Format | null {
   }
   const u8 = (pos: number): number => bytes[pos] ?? -1
   if (at(0, 'MThd')) return 'midi'
+  if (at(0, 'fLaC')) return 'flac'
+  if (at(0, 'ID3')) return at(id3Length(bytes), 'fLaC') ? 'flac' : 'mp3'
   if (at(0x2c, 'SCRM')) return 's3m'
   if (at(20, '!Scream!') && u8(29) === 2) return 'stm'
   if (at(0, 'MTM') && u8(3) === 0x10) return 'mtm'
@@ -31,6 +34,7 @@ export function detectFormat(bytes: Uint8Array): Format | null {
     const m = /^(\d\d)CH$/.exec(magic)
     if (m && Number(m[1]) >= 10 && Number(m[1]) <= 32) return 'mod'
   }
+  if (mp3Frame(bytes, 0)) return 'mp3' // last: a bare frame sync is the weakest magic
   return null
 }
 
@@ -43,6 +47,8 @@ export function parseFile(bytes: Uint8Array, opts?: { midiTarget?: MidiTarget })
   if (format === 's3m') return parseS3m(bytes)
   if (format === '669') return parse669(bytes)
   if (format === 'mtm') return parseMtm(bytes)
+  if (format === 'mp3') return parseMp3(bytes)
+  if (format === 'flac') return parseFlac(bytes)
   return parseMidi(bytes, opts?.midiTarget ?? 'gm')
 }
 

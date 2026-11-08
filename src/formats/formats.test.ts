@@ -250,3 +250,177 @@ describe('MT32_TO_GM', () => {
     expect(MT32_TO_GM[64]).toBeLessThanOrEqual(39)
   })
 })
+
+// --- MP3 / FLAC (P29) ---------------------------------------------------------------------------
+
+const ascii = (s: string): number[] => [...s].map((c) => c.charCodeAt(0))
+const be32 = (n: number): number[] => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
+const le32 = (n: number): number[] => be32(n).reverse()
+const sync = (n: number): number[] => [(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127]
+
+/** MPEG-1 Layer III, 128 kbps, 44.1 kHz, stereo: 417-byte frames. */
+const FRAME_BYTES = 417
+const frame = (body: number[] = []): number[] => {
+  const f = new Array<number>(FRAME_BYTES).fill(0)
+  f.splice(0, 4, 0xff, 0xfb, 0x90, 0x00)
+  f.splice(4, body.length, ...body)
+  return f
+}
+const frames = (n: number): number[] => Array.from({ length: n }, () => frame()).flat()
+
+/** ID3v2 tag with text frames (encoding byte included in each body). */
+const id3 = (major: 3 | 4, tags: [string, number[]][]): number[] => {
+  const body = tags.flatMap(([id, b]) => [
+    ...ascii(id),
+    ...(major === 4 ? sync(b.length) : be32(b.length)),
+    0,
+    0,
+    ...b,
+  ])
+  return [...ascii('ID3'), major, 0, 0, ...sync(body.length), ...body]
+}
+const utf16le = (s: string): number[] => [
+  0xff,
+  0xfe,
+  ...[...s].flatMap((c) => [c.charCodeAt(0), 0]),
+]
+const utf16be = (s: string): number[] => [...s].flatMap((c) => [0, c.charCodeAt(0)])
+
+const flac = (blocks: { type: number; body: number[] }[]): number[] => [
+  ...ascii('fLaC'),
+  ...blocks.flatMap((b, i) => [
+    (i === blocks.length - 1 ? 0x80 : 0) | b.type,
+    (b.body.length >> 16) & 255,
+    (b.body.length >> 8) & 255,
+    b.body.length & 255,
+    ...b.body,
+  ]),
+]
+/** 48 kHz, stereo, 16-bit, 96000 samples → 2 s. */
+const STREAMINFO = {
+  type: 0,
+  body: [
+    ...new Array<number>(10).fill(0),
+    0x0b,
+    0xb8,
+    0x02,
+    0xf0,
+    ...be32(96000),
+    ...new Array<number>(16).fill(0),
+  ],
+}
+const vorbis = (comments: string[]) => ({
+  type: 4,
+  body: [
+    ...le32(1),
+    ...ascii('x'),
+    ...le32(comments.length),
+    ...comments.flatMap((c) => [...le32(c.length), ...ascii(c)]),
+  ],
+})
+
+describe('MP3 / FLAC headers', () => {
+  const u8 = (a: number[]): Uint8Array => new Uint8Array(a)
+  it('detects FLAC, ID3-tagged MP3, bare-frame MP3 and ID3-tagged FLAC', () => {
+    expect(detectFormat(u8(flac([STREAMINFO])))).toBe('flac')
+    expect(detectFormat(u8([...id3(4, []), ...frames(2)]))).toBe('mp3')
+    expect(detectFormat(u8(frames(2)))).toBe('mp3')
+    expect(detectFormat(u8([...id3(3, []), ...flac([STREAMINFO])]))).toBe('flac')
+  })
+  it('reads ID3 text in all four encodings', () => {
+    const v4 = parseFile(
+      u8([
+        ...id3(4, [
+          ['TIT2', [3, ...new TextEncoder().encode('Héllo')]],
+          ['TPE1', [1, ...utf16le('Bob')]],
+        ]),
+        ...frames(2),
+      ]),
+    )
+    expect(v4).toMatchObject({ kind: 'stream', format: 'mp3', title: 'Héllo', artist: 'Bob' })
+    const v3 = parseFile(
+      u8([
+        ...id3(3, [
+          ['TIT2', [0, ...ascii('Caf'), 0xe9]],
+          ['TPE1', [2, ...utf16be('Ann')]],
+        ]),
+        ...frames(2),
+      ]),
+    )
+    expect(v3).toMatchObject({ title: 'Café', artist: 'Ann' })
+  })
+  it('uses a Xing frame count, else a CBR estimate', () => {
+    const xing = parseFile(
+      u8([
+        ...frame([...new Array<number>(32).fill(0), ...ascii('Xing'), ...be32(1), ...be32(1000)]),
+        ...frames(2),
+      ]),
+    )
+    expect(xing).toMatchObject({ sampleRate: 44100, channels: 2 })
+    expect(xing.kind === 'stream' && xing.durationSec).toBeCloseTo((1000 * 1152) / 44100, 6)
+    const cbr = parseFile(u8(frames(100)))
+    expect(cbr.kind === 'stream' && cbr.durationSec).toBeCloseTo(
+      (100 * FRAME_BYTES * 8) / 128000,
+      6,
+    )
+  })
+  it('reads FLAC STREAMINFO and Vorbis comments (keys case-insensitive)', () => {
+    const f = parseFile(u8(flac([STREAMINFO, vorbis(['title=T', 'ARTIST=A'])])))
+    expect(f).toMatchObject({
+      kind: 'stream',
+      format: 'flac',
+      title: 'T',
+      artist: 'A',
+      sampleRate: 48000,
+      channels: 2,
+      durationSec: 2,
+    })
+  })
+  it('throws ParseError without STREAMINFO or MP3 frames', () => {
+    expect(() => parseFile(u8(flac([vorbis([])])))).toThrow(ParseError)
+    expect(() => parseFile(u8([...id3(4, []), ...new Array<number>(64).fill(0)]))).toThrow(
+      ParseError,
+    )
+  })
+})
+
+const PRIVATE: {
+  rel: string
+  format: string
+  title: string
+  artist: string
+  sec: number
+  tol: number
+}[] = [
+  {
+    rel: 'private/01 - Abbath - To War!.mp3',
+    format: 'mp3',
+    title: 'To War!',
+    artist: 'Abbath',
+    sec: 335.2,
+    tol: 1,
+  },
+  {
+    rel: 'private/01. LOST IN PARADISE feat.AKLO.flac',
+    format: 'flac',
+    title: 'LOST IN PARADISE feat.AKLO',
+    artist: 'ALI',
+    sec: 328.96,
+    tol: 0.01,
+  },
+]
+describe('MP3 / FLAC test files (trackers/private, local only)', () => {
+  for (const t of PRIVATE)
+    it.skipIf(!existsSync(`trackers/${t.rel}`))(t.rel, () => {
+      const f = parseFile(load(t.rel))
+      expect(f).toMatchObject({
+        kind: 'stream',
+        format: t.format,
+        title: t.title,
+        artist: t.artist,
+        sampleRate: 44100,
+        channels: 2,
+      })
+      expect(f.kind === 'stream' && Math.abs(f.durationSec - t.sec)).toBeLessThanOrEqual(t.tol)
+    })
+})

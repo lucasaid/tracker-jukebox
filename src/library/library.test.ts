@@ -50,6 +50,7 @@ const good: ManifestEntry = {
   sampleNames: ['x'],
   message: '',
   midiTarget: null,
+  artist: '',
   addedAt: '2026-11-07T00:00:00.000Z',
 }
 

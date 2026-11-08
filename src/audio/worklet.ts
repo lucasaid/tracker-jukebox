@@ -53,6 +53,15 @@ class TrackerProcessor extends AudioWorkletProcessor {
           this.endedSent = false
           this.sinceSnapshot = 0
           this.sinceStats = 0
+          if (m.song.kind === 'stream') {
+            this.player = null
+            this.post({
+              type: 'error',
+              id: m.id,
+              message: 'Streamed songs play outside the worklet',
+            })
+            break
+          }
           if (m.song.kind === 'midi') {
             if (!this.bank) {
               this.player = null

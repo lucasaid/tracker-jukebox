@@ -61,6 +61,8 @@ function midiTargetFor(path: string): 'gm' | 'mt32' {
 
 function makePlayer(song: ParsedFile, opts: Partial<PlayerOptions>): Player {
   if (song.kind === 'tracker') return createTrackerPlayer(song, rate, opts)
+  if (song.kind === 'stream')
+    return fail(1, `${song.format.toUpperCase()} is streamed by the browser; not rendered`)
   try {
     const bank = parseSoundBank(
       new Uint8Array(readFileSync('public/soundfonts/GeneralUser-GS.sf2')),
