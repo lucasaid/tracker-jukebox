@@ -1,6 +1,6 @@
 // The visualizer well with a FULLSCREEN toggle. Fullscreen fills the window with the visualizer
 // (plus the browser's Fullscreen API where allowed); the player bar stays on top and, like the
-// toggle, fades out after IDLE_SEC without input and comes back on mouse move or click (keys leave it hidden).
+// toggle, fades out after IDLE_SEC without input and comes back on mouse move or click (keys leave it hidden; that waking click does nothing else).
 // On entering fullscreen and on every song change there, a now-playing card types in the title.
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -68,6 +68,18 @@ export function VizFrame(props: { children: ReactNode }) {
         root.dataset.idle = ''
       }, IDLE_SEC * 1000)
     }
+    // A tap while the UI is hidden only wakes it: the click it ends in never reaches the
+    // visualizer (no mode change) or the hidden buttons.
+    let swallowClick = false
+    const onDown = (): void => {
+      swallowClick = root.dataset.idle !== undefined
+      wake()
+    }
+    const onClick = (e: MouseEvent): void => {
+      if (!swallowClick) return
+      swallowClick = false
+      e.stopPropagation()
+    }
     // Esc: the browser leaves real fullscreen itself (fullscreenchange); this covers the CSS-only fallback
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setFull(false)
@@ -78,12 +90,14 @@ export function VizFrame(props: { children: ReactNode }) {
     root.dataset.vizFull = '' // App skips its page-navigation shortcuts while this is set
     wake()
     window.addEventListener('pointermove', wake)
-    window.addEventListener('pointerdown', wake)
+    window.addEventListener('pointerdown', onDown)
+    window.addEventListener('click', onClick, true)
     window.addEventListener('keydown', onKey)
     document.addEventListener('fullscreenchange', onFullscreen)
     return () => {
       window.removeEventListener('pointermove', wake)
-      window.removeEventListener('pointerdown', wake)
+      window.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('click', onClick, true)
       window.removeEventListener('keydown', onKey)
       document.removeEventListener('fullscreenchange', onFullscreen)
       clearTimeout(timer)
