@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   ByteReader,
@@ -10,29 +10,26 @@ import {
   parseSoundBank,
 } from './index'
 import { parseMod } from './mod'
-import { parseStm } from './stm'
 import type { Format, Song } from './index'
 
 const load = (rel: string): Uint8Array => new Uint8Array(readFileSync(`trackers/${rel}`))
 
+// Re-targeted 2026-11-08 after the library was reorganised (docs/PLAN.md → Findings). The STM
+// tests went with KTULHU.STM, the only STM file; values for the new files come from openmpt123.
 const EXPECTED: Record<string, Format> = {
   '669/CANTINA.669': 'mod',
-  's3m/KTULHU.STM': 'stm',
 }
 const FILES = {
-  '669': ['CIRCUS', 'EVILGIRL', 'FX-SOBER', 'LITHIUM', 'NEW', 'NUDEMOUS', 'SIRIUS', 'TFA'].map(
+  '669': ['CIRCUS', 'EVILGIRL', 'NEW', 'NUDEMOUS', 'OPUS3NO2', 'RIGHTNOW', 'SIRIUS', 'TFA'].map(
     (n) => `669/${n}.669`,
   ),
-  midi: ['99WAYS', 'BLACKCAT', 'BLAKLDGE', 'BUMBLE', 'DANNYBOY', 'JAZZVIBE', 'JUNGLE'].map(
+  midi: ['7THSON', 'BEAUTYB', 'DRIFTAWA', 'FAMLYDOG', 'GSRITNOW', 'MOONDAN2', 'PICKUP55'].map(
     (n) => `midi/${n}.MID`,
   ),
-  mod: ['12WARIOR', '1CARESS', '4BLOUNDS', '90210'].map((n) => `mod/${n}.MOD`),
-  mtm: ['COOLASS', 'CREEPING', 'EXCUSES', 'HEART', 'JUSTICE', 'MASTER', 'SOCRUEL'].map(
-    (n) => `mtm/${n}.MTM`,
-  ),
+  mod: ['12THWRRR', '1CARESS', '4BLOUNDS', '90210'].map((n) => `mod/${n}.MOD`),
+  mtm: ['COOLASS', 'EXCUSES', 'SOCRUEL'].map((n) => `mtm/${n}.MTM`),
   s3m: [
     '2ND_PM',
-    'DOOMMUS1',
     'FEARDARK',
     'FINERUN',
     'ICEFRONT',
@@ -46,8 +43,8 @@ const FILES = {
 for (const [fmt, files] of Object.entries(FILES)) for (const f of files) EXPECTED[f] = fmt as Format
 
 describe('detectFormat', () => {
-  it('covers all 38 files', () => {
-    expect(Object.keys(EXPECTED)).toHaveLength(38)
+  it('covers all 32 files', () => {
+    expect(Object.keys(EXPECTED)).toHaveLength(32)
   })
   it.each(Object.entries(EXPECTED))('%s → %s', (file, fmt) => {
     expect(detectFormat(load(file))).toBe(fmt)
@@ -91,9 +88,9 @@ const song = (rel: string): Song => {
   return s
 }
 
-describe('MOD + STM parsers', () => {
-  it('12WARIOR', () => {
-    const s = song('mod/12WARIOR.MOD')
+describe('MOD parser', () => {
+  it('12THWRRR', () => {
+    const s = song('mod/12THWRRR.MOD')
     expect([s.channels, s.orders.length, s.patterns.length]).toEqual([4, 30, 23])
   })
   it('90210', () => {
@@ -117,19 +114,13 @@ describe('MOD + STM parsers', () => {
       'Cantina band',
     ])
   })
-  it('KTULHU', () => {
-    const s = song('s3m/KTULHU.STM')
-    expect(s.format).toBe('stm')
-    expect([s.title, s.channels, s.patterns.length]).toEqual(['the call of ktulu', 4, 42])
-  })
   // parseFile can't see these: detectFormat needs 1084 bytes for a MOD, so a 600-byte MOD is
   // 'unknown format'. The parsers themselves must throw ParseError.
   it.each([
-    ['mod/12WARIOR.MOD', parseMod],
+    ['mod/12THWRRR.MOD', parseMod],
     ['mod/90210.MOD', parseMod],
     ['mod/1CARESS.MOD', parseMod],
     ['669/CANTINA.669', parseMod],
-    ['s3m/KTULHU.STM', parseStm],
   ] as const)('%s truncated to 600 bytes throws ParseError', (file, parse) => {
     expect(() => parse(load(file).subarray(0, 600))).toThrow(ParseError)
   })
@@ -165,23 +156,23 @@ describe('S3M parser', () => {
 })
 
 describe('MTM + 669 parsers', () => {
-  it('MASTER', () => {
-    const s = song('mtm/MASTER.MTM')
+  it('SOCRUEL', () => {
+    const s = song('mtm/SOCRUEL.MTM')
     expect([s.title, s.channels, s.patterns.length, s.orders.length]).toEqual([
-      'Master Of Puppets',
-      4,
-      106,
-      97,
+      'So Cruel',
+      6,
+      53,
+      58,
     ])
-    expect(s.message).toContain('Forensic Medicine')
+    expect(s.message).toContain('ALPHA CITY')
   })
   it('SIRIUS', () => {
     const s = song('669/SIRIUS.669')
     expect([s.samples.length, s.patterns.length, s.title]).toEqual([6, 10, 'Sirius of Canis Major'])
   })
-  it('all 31 tracker files parse', () => {
+  it('all 25 tracker files parse', () => {
     const files = Object.entries(EXPECTED).filter(([, f]) => f !== 'midi')
-    expect(files).toHaveLength(31)
+    expect(files).toHaveLength(25)
     for (const [file, fmt] of files) expect(song(file).format).toBe(fmt)
   })
 })
@@ -192,17 +183,26 @@ describe('MIDI parser', () => {
     if (s.kind !== 'midi') throw new Error('not midi')
     return s
   }
-  it('99WAYS track names, override target', () => {
-    const s = midi('midi/99WAYS.MID')
-    for (const n of ['Guitar 1', 'Guitar 2', 'Bass', 'Fill Guitar']) expect(s.message).toContain(n)
+  it('GSRITNOW track names, override target', () => {
+    const s = midi('midi/GSRITNOW.MID')
+    for (const n of ['Clean Guitar', 'Pick Bass', 'Piano Right Hand', 'Overdrive Guitar'])
+      expect(s.message).toContain(n)
     expect(s.target).toBe('gm')
-    const overrides: unknown = JSON.parse(readFileSync('scripts/midi-overrides.json', 'utf8'))
-    expect(overrides).toMatchObject({ 'midi/99ways.mid': 'mt32' })
-    expect(midi('midi/99WAYS.MID', 'mt32').target).toBe('mt32')
+    expect(midi('midi/GSRITNOW.MID', 'mt32').target).toBe('mt32')
   })
-  it('JAZZVIBE', () => {
-    const s = midi('midi/JAZZVIBE.MID')
-    expect(s.ticksPerBeat).toBe(480)
+  it('every MIDI override names a file in trackers/', () => {
+    const overrides: unknown = JSON.parse(readFileSync('scripts/midi-overrides.json', 'utf8'))
+    const ids = new Set(
+      readdirSync('trackers', { recursive: true, encoding: 'utf8' }).map((p) =>
+        p.split('\\').join('/').toLowerCase(),
+      ),
+    )
+    expect(typeof overrides === 'object' && overrides !== null).toBe(true)
+    for (const id of Object.keys(overrides ?? {})) expect(ids.has(id), id).toBe(true)
+  })
+  it('BEAUTYB', () => {
+    const s = midi('midi/BEAUTYB.MID')
+    expect(s.ticksPerBeat).toBe(240)
     expect(s.tempoMap[0]?.tick).toBe(0)
   })
   it('all 7 MIDI files parse with sorted events', () => {

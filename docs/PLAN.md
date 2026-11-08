@@ -134,20 +134,21 @@ Suggested commit: type(scope): message
 
 **Expected values used by the tests:**
 
-| File              | Values                                                                                        |
-| ----------------- | --------------------------------------------------------------------------------------------- |
-| mod/12WARIOR.MOD  | 4ch, 30 orders, 23 patterns                                                                   |
-| mod/90210.MOD     | title "Beverly Hills 90210", sample 1 "BASS.SAM", 4ch, 13 orders                              |
-| mod/1CARESS.MOD   | sample 1 "Empire BBS", sample 2 "679-0488"                                                    |
-| 669/CANTINA.669   | format `mod`, 8ch, 17 orders, 17 patterns, title "Cantina band"                               |
-| s3m/KTULHU.STM    | title "the call of ktulu", 4ch, 42 patterns                                                   |
-| s3m/PANIC.S3M     | title "" (blank in file), 16ch, 56 samples, 62 patterns                                       |
-| s3m/NIN-1.S3M     | title "NIN Melody Re-Mix I", 16ch, stereo false                                               |
-| s3m/NOTFKIDS.S3M  | 4ch                                                                                           |
-| mtm/MASTER.MTM    | title "Master Of Puppets", 4ch, 106 patterns, 97 orders, message contains "Forensic Medicine" |
-| 669/SIRIUS.669    | 6 samples, 10 patterns, title "Sirius of Canis Major"                                         |
-| midi/99WAYS.MID   | track names Guitar 1 / Guitar 2 / Bass / Fill Guitar                                          |
-| midi/JAZZVIBE.MID | ticksPerBeat 480                                                                              |
+> **Re-targeted 2026-11-08 (user decision).** The library was reorganised, and 16 of the original 38 files are gone (`12WARIOR.MOD` was renamed `12THWRRR.MOD`). The tests now cover 32 files (25 trackers + 7 MIDI). Values for the new files come from `openmpt123 --info` (trackers) and an independent header read (MIDI), and match our parsers. The library has no STM file left, so the STM tests were dropped and the STM parser has no test coverage. `scripts/midi-overrides.json` lost its two entries (both files gone); a test now checks that every override names an existing file. The table below is the current one; the counts and MIDI lists above describe the original library.
+
+| File              | Values                                                                       |
+| ----------------- | ---------------------------------------------------------------------------- |
+| mod/12THWRRR.MOD  | 4ch, 30 orders, 23 patterns (renamed from 12WARIOR.MOD)                      |
+| mod/90210.MOD     | title "Beverly Hills 90210", sample 1 "BASS.SAM", 4ch, 13 orders             |
+| mod/1CARESS.MOD   | sample 1 "Empire BBS", sample 2 "679-0488"                                   |
+| 669/CANTINA.669   | format `mod`, 8ch, 17 orders, 17 patterns, title "Cantina band"              |
+| s3m/PANIC.S3M     | title "" (blank in file), 16ch, 56 samples, 62 patterns                      |
+| s3m/NIN-1.S3M     | title "NIN Melody Re-Mix I", 16ch, stereo false                              |
+| s3m/NOTFKIDS.S3M  | 4ch                                                                          |
+| mtm/SOCRUEL.MTM   | title "So Cruel", 6ch, 53 patterns, 58 orders, message contains "ALPHA CITY" |
+| 669/SIRIUS.669    | 6 samples, 10 patterns, title "Sirius of Canis Major"                        |
+| midi/GSRITNOW.MID | track names Clean Guitar / Pick Bass / Piano Right Hand / Overdrive Guitar   |
+| midi/BEAUTYB.MID  | ticksPerBeat 240                                                             |
 
 ## User decisions
 
