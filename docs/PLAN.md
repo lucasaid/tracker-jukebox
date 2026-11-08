@@ -1770,7 +1770,7 @@ interface VisualizerDef {
 - `load()` with a `stream` source: unload the deck's worklet, set `media.src`, wait for `loadedmetadata` (`error` → `PlaybackError`), take `durationSec` from `media.duration` when finite, apply `seek.seconds`. A tracker/MIDI load into a deck that held a stream pauses and clears `media.src`.
 - `play`/`pause`/`seek` act on the front deck's `media` when it holds a stream; `{ order }` seeks are ignored. `media`'s `ended` follows the same audible-deck rule as the worklet's `ended`.
 - `latest()` for a stream deck fills a preallocated `Snapshot`: `seconds = media.currentTime`, `pos = { kind: 'stream' }`, `ch` = L/R (`note` −1, `ins` 0, `volume` = RMS clamped to 0..1, `active` while playing), `scopes` from the two analysers, `triggered` on both from the beat detector fed with the mean RMS².
-- **Beat detector:** true when energy > 1.4 × its ~1 s moving average, above a small floor, and ≥ 120 ms since the last beat.
+- **Beat detector:** fed the mean square of a separate bass analyser on `media` (150 Hz low-pass `BiquadFilterNode`, `fftSize = 1024` ≈ 23 ms), so it follows the kick, not hats or vocals. True when that energy > 1.4 × its ~1 s moving average, above a small floor, and ≥ 120 ms since the last beat. A detected beat is held back by `ctx.outputLatency` (else `baseLatency`) before `triggered` is set, matching the tracker snapshot horizon; one beat can be pending at a time.
 - `muteMask`, interpolation and stereo separation don't apply to streams.
 - ponytail: `media.play()` outside a user gesture (jukebox advance) may be refused on iOS; if it is, the engine reports a `PlaybackError` and the jukebox skips as for a failed load.
 
