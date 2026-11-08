@@ -309,7 +309,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         loop: true,
       })
       // ponytail: autoplay refused → media keys fall back to the browser's default target
-      keepAlive.current.play().catch(() => null)
+      keepAlive.current.play().catch((err: unknown) => {
+        console.warn('Media-key keep-alive could not play', err)
+      })
     } else if (status !== 'loading') keepAlive.current?.pause()
   }, [status])
 
