@@ -10,18 +10,19 @@ const ROT_PER_SEC = 0.15 // radians
 const FADE_PER_SEC = 1.2
 const HUE_PER_SEC = 25 // degrees
 
-function warpInstance(): VisualizerInstance {
+function warpInstance(start = 0): VisualizerInstance {
   const drive = createDrive()
   const skip = createStill()
   const buf = document.createElement('canvas')
   const bctx = buf.getContext('2d')
-  let ring = true
+  let ring = start % 2 === 0
   let t = 0
   const label = createModeLabel()
   return {
     click() {
       ring = !ring
       label.show(ring ? 'ring' : 'line')
+      return ring ? 0 : 1
     },
     draw(ctx, f, dt) {
       if (!f || !bctx) return idle(ctx, f)

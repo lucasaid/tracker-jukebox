@@ -38,14 +38,16 @@ export interface Frame {
 export interface VisualizerInstance {
   /** f = null when nothing is loaded. dt = seconds since the previous call (0 on the first). */
   draw(ctx: CanvasRenderingContext2D, f: Frame | null, dt: number): void
-  click?(x: number, y: number): void
+  /** returns the new mode for the host to remember, or undefined for a click that isn't one */
+  click?(x: number, y: number): number | undefined
   dispose?(): void
 }
 
 export interface VisualizerDef {
   id: string
   name: string
-  create(): VisualizerInstance
+  /** mode = what an earlier click() returned (0 if none); wrap it, it may be stale */
+  create(mode?: number): VisualizerInstance
   /** false → unavailable for streamed (MP3/FLAC) songs: the picker greys it out and the host draws Scope */
   streams?: false
 }

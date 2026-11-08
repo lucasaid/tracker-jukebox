@@ -66,7 +66,12 @@ describe('settings', () => {
   it('replaces wrong-typed or out-of-range leaves and keeps valid ones', () => {
     const raw = {
       theme: 'neon',
-      player: { interpolation: 'cubic', stereoSeparation: 7, lastViz: 3 },
+      player: {
+        interpolation: 'cubic',
+        stereoSeparation: 7,
+        lastViz: 3,
+        vizModes: { starfield: 5, plasma: -1, warp: 1.5, scope: 'x' },
+      },
       jukebox: {
         shuffle: false,
         formats: ['mod', 'xm', 5, 's3m'],
@@ -78,7 +83,11 @@ describe('settings', () => {
     }
     const s = loadSettings(memory({ [SETTINGS_KEY]: JSON.stringify(raw) }))
     expect(s.theme).toBe(DEFAULTS.theme)
-    expect(s.player).toEqual({ ...DEFAULTS.player, interpolation: 'cubic' })
+    expect(s.player).toEqual({
+      ...DEFAULTS.player,
+      interpolation: 'cubic',
+      vizModes: { starfield: 5 },
+    })
     expect(s.jukebox).toEqual({
       ...DEFAULTS.jukebox,
       shuffle: false,

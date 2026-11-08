@@ -8,9 +8,9 @@ export const channels: VisualizerDef = {
   id: 'channels',
   name: 'Channels',
   streams: false,
-  create: () => {
+  create: (mode = 0) => {
     let vu: number[] = []
-    const cycle = createColourCycle()
+    const cycle = createColourCycle(mode)
     return {
       click: cycle.next,
       draw(ctx, f, dt) {

@@ -25,7 +25,7 @@ function parseHex(css: string): Rgb | null {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
 }
 
-function terrainInstance(): VisualizerInstance {
+function terrainInstance(mode = 0): VisualizerInstance {
   // ring buffer of DEPTH spectra, `head` is the newest row
   const rows = new Uint8Array(DEPTH * BANDS)
   let head = 0
@@ -39,7 +39,7 @@ function terrainInstance(): VisualizerInstance {
       Math.floor((MIN_HZ * (MAX_HZ / MIN_HZ) ** ((b + 1) / BANDS)) / BIN_HZ),
     )
   }
-  const cycle = createColourCycle()
+  const cycle = createColourCycle(mode)
   // screen position and height (0..1) of every grid point, row-major by depth
   const xs = new Float32Array(DEPTH * BANDS)
   const ys = new Float32Array(DEPTH * BANDS)

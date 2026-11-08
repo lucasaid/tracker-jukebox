@@ -8,7 +8,7 @@ import type { Settings } from '../../state/settings'
 import { VisualizerHost } from '../../viz'
 import { DropZone } from '../components/DropZone'
 import { showToast } from '../components/Toast'
-import { nextViz, VizFrame } from '../components/VizFrame'
+import { nextViz, useVizMode, VizFrame } from '../components/VizFrame'
 import { VizPicker } from '../components/VizPicker'
 import styles from '../ui.module.css'
 
@@ -22,6 +22,7 @@ const AUTO_VIZ: { value: Settings['jukebox']['autoViz']; label: string }[] = [
 export function Jukebox() {
   const { engine, status, current, mode, startJukebox } = usePlayer()
   const { settings, update } = useSettings()
+  const vizMode = useVizMode()
   const j = settings.jukebox
   const [busy, setBusy] = useState(false)
   const running = mode === 'jukebox' && status === 'playing'
@@ -138,7 +139,12 @@ export function Jukebox() {
           </label>
         </p>
         <VizFrame>
-          <VisualizerHost vizId={settings.player.lastViz} engine={engine} label="Visualizer" />
+          <VisualizerHost
+            vizId={settings.player.lastViz}
+            engine={engine}
+            label="Visualizer"
+            {...vizMode}
+          />
         </VizFrame>
         <VizPicker />
       </section>

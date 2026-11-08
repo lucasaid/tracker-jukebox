@@ -10,12 +10,12 @@ export const themeColours = (p: Palette): string[] => [
   ...new Set(KEYS.map((k) => p[k].toLowerCase()).filter(Boolean)),
 ]
 
-export function createColourCycle(): {
-  next(): void
+export function createColourCycle(start = 0): {
+  next(): number
   colour(p: Palette): string
   lap(p: Palette): number
 } {
-  let i = 0
+  let i = start
   let last: Palette | null = null
   let colours: string[] = []
   const list = (p: Palette): string[] => {
@@ -28,7 +28,7 @@ export function createColourCycle(): {
   }
   return {
     next() {
-      i++
+      return ++i
     },
     colour(p) {
       const c = list(p)

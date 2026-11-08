@@ -911,13 +911,13 @@ export interface VisualizerInstance {
   /** f = null when nothing is loaded: draw the idle screen. dt = seconds since the previous call (0 on the first). */
   draw(ctx: CanvasRenderingContext2D, f: Frame | null, dt: number): void
   /** Optional input: the host forwards canvas clicks/taps in CSS px. */
-  click?(x: number, y: number): void
+  click?(x: number, y: number): number | undefined // the new mode, kept in settings.player.vizModes
   dispose?(): void
 }
 export interface VisualizerDef {
   id: string
   name: string
-  create(): VisualizerInstance
+  create(mode?: number): VisualizerInstance // starts in a remembered mode; wraps it
 }
 // index.ts
 export const visualizers: readonly VisualizerDef[] // final order: pattern, scope, channels, plasma, starfield, copper
@@ -949,7 +949,12 @@ export type Theme = (typeof THEMES)[number]
 export interface Settings {
   version: 1
   theme: Theme // applied as <html data-theme>
-  player: { interpolation: Interpolation; stereoSeparation: number; lastViz: string }
+  player: {
+    interpolation: Interpolation
+    stereoSeparation: number
+    lastViz: string
+    vizModes: Record<string, number> // visualizer id → click mode (non-negative integer)
+  }
   jukebox: {
     shuffle: boolean
     formats: Format[] // empty = all
@@ -970,7 +975,7 @@ export interface Settings {
 }
 export const DEFAULTS: Settings
 // { version: 1, theme: 'bbs',
-//   player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern' },
+//   player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern', vizModes: {} },
 //   jukebox: { shuffle: true, formats: [], favoritesOnly: false, fade: true, maxLengthMin: 5, autoViz: 'perSong' },
 //   intro: { skip: false },
 //   browse: { sortKey: 'title', sortDir: 'asc', formats: [], channels: [], favoritesOnly: false } }

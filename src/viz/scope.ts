@@ -11,8 +11,8 @@ const BIN_HZ = 48000 / 2048
 export const scope: VisualizerDef = {
   id: 'scope',
   name: 'Scope',
-  create: () => {
-    const cycle = createColourCycle()
+  create: (mode = 0) => {
+    const cycle = createColourCycle(mode)
     return {
       click: cycle.next,
       draw(ctx, f, _dt) {

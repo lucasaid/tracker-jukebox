@@ -107,8 +107,20 @@ export function VisualizerHost(props: {
   className?: string
   /** draw this song, still and silent, instead of what the engine plays */
   preview?: ParsedFile
+  /** the visualizer's click mode to start in; read at creation only */
+  mode?: number
+  /** called with the new mode after a click that changed it */
+  onMode?: (mode: number) => void
 }) {
   const { vizId, engine, label, className, preview } = props
+  // refs, so a remembered mode change doesn't recreate the visualizer
+  const modeRef = useRef(props.mode ?? 0)
+  const onModeRef = useRef(props.onMode)
+  // declared before the create effect, so it runs first
+  useEffect(() => {
+    modeRef.current = props.mode ?? 0
+    onModeRef.current = props.onMode
+  })
   const boxRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const glowRef = useRef<HTMLCanvasElement>(null)
@@ -124,7 +136,7 @@ export function VisualizerHost(props: {
     const ctx = canvas?.getContext('2d')
     if (!box || !canvas || !ctx) return
     const def = getVisualizer(id)
-    const instance = def.create()
+    const instance = def.create(modeRef.current)
     instanceRef.current = instance
     // Made on the first streamed frame for a visualizer that can't draw MP3/FLAC.
     let fallback: VisualizerInstance | null = null
@@ -235,7 +247,8 @@ export function VisualizerHost(props: {
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          instanceRef.current?.click?.(e.clientX - r.left, e.clientY - r.top)
+          const mode = instanceRef.current?.click?.(e.clientX - r.left, e.clientY - r.top)
+          if (mode !== undefined) onModeRef.current?.(mode)
         }}
       />
       <canvas

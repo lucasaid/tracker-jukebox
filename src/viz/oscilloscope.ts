@@ -4,8 +4,8 @@ import type { VisualizerDef, VisualizerInstance } from './types'
 const MODES = ['dots', 'lines', 'solid'] as const
 const LABEL_SEC = 1.5
 
-function oscilloscopeInstance(): VisualizerInstance {
-  let mode = 0
+function oscilloscopeInstance(start = 0): VisualizerInstance {
+  let mode = start % MODES.length
   let labelSec = 0
   let gradient: CanvasGradient | null = null
   let gradientH = 0
@@ -13,6 +13,7 @@ function oscilloscopeInstance(): VisualizerInstance {
     click() {
       mode = (mode + 1) % MODES.length
       labelSec = LABEL_SEC
+      return mode
     },
     draw(ctx, f, dt) {
       const w = f?.width ?? ctx.canvas.clientWidth

@@ -21,6 +21,20 @@ export function nextViz(s: Settings): Settings {
   return next ? { ...s, player: { ...s.player, lastViz: next.id } } : s
 }
 
+/** VisualizerHost's remembered click mode for the current visualizer (settings.player.vizModes). */
+export function useVizMode(): { mode: number; onMode: (mode: number) => void } {
+  const { settings, update } = useSettings()
+  const id = settings.player.lastViz
+  return {
+    mode: settings.player.vizModes[id] ?? 0,
+    onMode: (mode) =>
+      update((s) => ({
+        ...s,
+        player: { ...s.player, vizModes: { ...s.player.vizModes, [id]: mode } },
+      })),
+  }
+}
+
 /** Plays its CSS intro/outro once per mount; VizFrame remounts it per song via `key`. */
 function TitleCard(props: { entry: ManifestEntry }) {
   const { entry } = props

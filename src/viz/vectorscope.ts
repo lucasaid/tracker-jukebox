@@ -11,12 +11,12 @@ const FADE_PER_SEC = 10 // phosphor persistence
 const AGC_SEC = 0.5 // auto-gain time constant
 const FILL = 0.9 // the auto-gain aims the loudest sample at this fraction of the radius
 
-function vectorscopeInstance(): VisualizerInstance {
+function vectorscopeInstance(mode = 0): VisualizerInstance {
   const left = new Float32Array(SCOPE_LEN)
   const right = new Float32Array(SCOPE_LEN)
   let gain = 1
   let size = ''
-  const cycle = createColourCycle()
+  const cycle = createColourCycle(mode)
   return {
     click: cycle.next,
     draw(ctx, f, dt) {

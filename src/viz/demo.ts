@@ -93,7 +93,7 @@ const level = (freq: Uint8Array, lo: number, hi: number): number => {
 const follow = (cur: number, target: number, dt: number): number =>
   cur + (target - cur) * Math.min(1, dt * (target > cur ? 20 : 5))
 
-function plasmaInstance(): VisualizerInstance {
+function plasmaInstance(start = 0): VisualizerInstance {
   const drive = createDrive()
   const skip = createStill()
   const small = document.createElement('canvas')
@@ -116,12 +116,13 @@ function plasmaInstance(): VisualizerInstance {
   let mid = 0
   let high = 0
   let palettePhase = 0
-  let mode = SWELL
+  let mode = start % PLASMA_MODES
   const label = createModeLabel()
   return {
     click() {
       mode = (mode + 1) % PLASMA_MODES
       label.show(PLASMA_NAMES[mode] ?? '')
+      return mode
     },
     draw(ctx, f, dt) {
       if (!f || !sctx) return idle(ctx, f)
@@ -282,7 +283,7 @@ const STREAM_PLANET_SEC = 12
 
 const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo)
 
-function starfieldInstance(): VisualizerInstance {
+function starfieldInstance(start = 0): VisualizerInstance {
   const drive = createDrive()
   const skip = createStill()
   const stars: Star[] = Array.from({ length: 220 }, () => ({
@@ -297,7 +298,7 @@ function starfieldInstance(): VisualizerInstance {
   /** per-channel pulse, 1 on a trigger, decaying over PULSE_SEC */
   const pulses = new Float32Array(STAR_GROUPS)
   /** click cycles 8 modes; bit 1 = coloured, bit 2 = trails, bit 4 = planets */
-  let mode = 0
+  let mode = start % 8
   let planets: Planet[] = []
   let sinceSpawnSec = PLANET_COOLDOWN_SEC
   let lastOrder: number | null = null
@@ -312,6 +313,7 @@ function starfieldInstance(): VisualizerInstance {
           .filter(Boolean)
           .join(' + '),
       )
+      return mode
     },
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)

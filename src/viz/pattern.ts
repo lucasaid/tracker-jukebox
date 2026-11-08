@@ -228,6 +228,8 @@ export const pattern: VisualizerDef = {
       draw,
       click() {
         page = (page + 1) % pages
+        // paging isn't a mode: not remembered
+        return undefined
       },
     }
   },

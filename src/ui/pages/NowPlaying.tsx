@@ -15,7 +15,7 @@ import { InfoPanel } from '../components/InfoPanel'
 import { MessageScroller } from '../components/MessageScroller'
 import { SampleBrowser } from '../components/SampleBrowser'
 import { showToast } from '../components/Toast'
-import { VizFrame } from '../components/VizFrame'
+import { useVizMode, VizFrame } from '../components/VizFrame'
 import { VizPicker } from '../components/VizPicker'
 import styles from '../ui.module.css'
 
@@ -38,6 +38,7 @@ const takeTab = (): Tab | null => {
 export function NowPlaying({ id }: { id: string }) {
   const { engine, current, entries } = usePlayer()
   const { settings } = useSettings()
+  const vizMode = useVizMode()
   const [where, setWhere] = useState('')
   const [link, setLink] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>(() => takeTab() ?? 'viz')
@@ -139,6 +140,7 @@ export function NowPlaying({ id }: { id: string }) {
                 engine={engine}
                 label="Visualizer"
                 preview={playing ? undefined : preview.song}
+                {...vizMode}
               />
             </VizFrame>
             <VizPicker />

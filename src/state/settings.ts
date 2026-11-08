@@ -10,7 +10,13 @@ export interface Settings {
   version: 1
   /** applied as <html data-theme>; unknown value → DEFAULTS.theme */
   theme: Theme
-  player: { interpolation: Interpolation; stereoSeparation: number; lastViz: string }
+  player: {
+    interpolation: Interpolation
+    stereoSeparation: number
+    lastViz: string
+    /** visualizer id → its click mode, as VisualizerInstance.click returned it */
+    vizModes: Record<string, number>
+  }
   jukebox: {
     shuffle: boolean
     /** empty = all */
@@ -35,7 +41,7 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   version: 1,
   theme: 'bbs',
-  player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern' },
+  player: { interpolation: 'nearest', stereoSeparation: 1, lastViz: 'pattern', vizModes: {} },
   jukebox: {
     shuffle: true,
     formats: [],
@@ -121,6 +127,7 @@ export function loadSettings(storage?: Storage | null): Settings {
   const isFraction = (v: unknown): v is number => typeof v === 'number' && v >= 0 && v <= 1
   const isMinutes = (v: unknown): v is number =>
     typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 30
+  const isMode = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
   const isText = (v: unknown): v is string => typeof v === 'string' && v !== ''
   const formats = isRecord(jukebox) && Array.isArray(jukebox.formats) ? jukebox.formats : null
   const list = (src: unknown, key: string): unknown[] | null => {
@@ -138,6 +145,11 @@ export function loadSettings(storage?: Storage | null): Settings {
       interpolation: leaf(player, 'interpolation', isOneOf(INTERPOLATIONS), d.player.interpolation),
       stereoSeparation: leaf(player, 'stereoSeparation', isFraction, d.player.stereoSeparation),
       lastViz: leaf(player, 'lastViz', isText, d.player.lastViz),
+      vizModes: Object.fromEntries(
+        Object.entries(leaf(player, 'vizModes', isRecord, d.player.vizModes)).filter(
+          (e): e is [string, number] => isMode(e[1]),
+        ),
+      ),
     },
     jukebox: {
       shuffle: leaf(jukebox, 'shuffle', isBool, d.jukebox.shuffle),

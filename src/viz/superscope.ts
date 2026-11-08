@@ -11,10 +11,10 @@ const ROT_PER_SEC = 0.4 // radians; a trigger pulse spins it faster
 const HUE_PER_SEC = 40
 const LABEL_SEC = 1.5
 
-function superscopeInstance(): VisualizerInstance {
+function superscopeInstance(start = 0): VisualizerInstance {
   const drive = createDrive()
   const skip = createStill()
-  let shape = 0
+  let shape = start % SHAPES.length
   let labelSec = 0
   let rot = 0
   let t = 0
@@ -23,6 +23,7 @@ function superscopeInstance(): VisualizerInstance {
     click() {
       shape = (shape + 1) % SHAPES.length
       labelSec = LABEL_SEC
+      return shape
     },
     draw(ctx, f, dt) {
       if (!f) return idle(ctx, f)
