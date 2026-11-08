@@ -50,6 +50,8 @@ export type EngineEvent =
 const KEPT_SNAPSHOTS = 32
 /** Streamed-channel RMS → ChannelState.volume; music sits around 0.1–0.3 RMS. */
 const STREAM_VOLUME_GAIN = 3
+/** Stream beats come from the audio below this. */
+const BASS_HZ = 150
 
 interface Stamped {
   at: number
@@ -78,7 +80,12 @@ interface Deck {
   bufR: Float32Array<ArrayBuffer>
   /** filled by latest() while streaming; preallocated */
   streamSnap: Snapshot
+  /** low-passed analyser on `media`: the beat detector listens to the kick, not the hats */
+  bass: AnalyserNode
+  bassBuf: Float32Array<ArrayBuffer>
   beat: (energy: number, dtSec: number) => boolean
+  /** ctx time at which a detected beat reaches the speakers, or -1 */
+  beatDueSec: number
   lastStreamSec: number
 }
 
@@ -194,6 +201,13 @@ export class AudioEngine {
       split.connect(scopeR, 1)
       const bufL = new Float32Array(SCOPE_LEN)
       const bufR = new Float32Array(SCOPE_LEN)
+      const lowpass = ctx.createBiquadFilter()
+      lowpass.type = 'lowpass'
+      lowpass.frequency.value = BASS_HZ
+      const bass = ctx.createAnalyser()
+      // 1024 frames ≈ 23 ms: longer than a 60 fps frame and than one cycle of a kick's body
+      bass.fftSize = 1024
+      source.connect(lowpass).connect(bass)
       const side = (pan: number) => ({
         active: false,
         note: NOTE_NONE,
@@ -224,7 +238,10 @@ export class AudioEngine {
           ch: [side(-1), side(1)],
           scopes: [bufL, bufR],
         },
+        bass,
+        bassBuf: new Float32Array(1024),
         beat: createBeatDetector(),
+        beatDueSec: -1,
         lastStreamSec: 0,
       }
       node.port.onmessage = (e: MessageEvent<FromWorklet>) => this.onWorklet(deck, e.data)
@@ -417,6 +434,7 @@ export class AudioEngine {
         if (seek && 'seconds' in seek) media.currentTime = seek.seconds
         target.lastStreamSec = media.currentTime
         target.beat = createBeatDetector()
+        target.beatDueSec = -1
       } else {
         this.stopMedia(target)
         const ready = new Promise<void>((ok, fail) => {
@@ -592,7 +610,15 @@ export class AudioEngine {
     const msL = meanSquare(deck.bufL)
     const msR = meanSquare(deck.bufR)
     // Only moving time counts: paused, or a seek backwards, never makes a beat.
-    const beat = dtSec > 0 && dtSec < 1 && deck.beat((msL + msR) / 2, dtSec)
+    deck.bass.getFloatTimeDomainData(deck.bassBuf)
+    const now = ctx.currentTime
+    // The analysers hear the audio before the speakers do: hold the beat back by the output
+    // latency, as latest() does for tracker snapshots.
+    // ponytail: one pending beat, a second beat within the latency (Bluetooth) is dropped
+    if (dtSec > 0 && dtSec < 1 && deck.beat(meanSquare(deck.bassBuf), dtSec) && deck.beatDueSec < 0)
+      deck.beatDueSec = now + (ctx.outputLatency || ctx.baseLatency || 0)
+    const beat = deck.beatDueSec >= 0 && now >= deck.beatDueSec
+    if (beat || dtSec < 0) deck.beatDueSec = -1
     const playing = !deck.media.paused
     s.ch.forEach((c, i) => {
       c.active = playing

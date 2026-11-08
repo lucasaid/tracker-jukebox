@@ -277,6 +277,8 @@ const PLANET_TRAIL_SEC = 0.6
 const PLANET_BODIES = ['#4f6290', '#8a6a52', '#5e8270', '#735c8c', '#8c5a5a']
 /** MIDI has no patterns: a planet comes when the loudness jumps this far over its slow average */
 const LOUD_JUMP = 1.6
+/** MP3/FLAC have neither: a planet comes on the first beat this long after the last one */
+const STREAM_PLANET_SEC = 12
 
 const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo)
 
@@ -338,6 +340,9 @@ function starfieldInstance(): VisualizerInstance {
       if (pos.kind === 'tracker') {
         spawn = lastOrder !== null && pos.order !== lastOrder
         lastOrder = pos.order
+      } else if (pos.kind === 'stream') {
+        // mastered audio is too evenly loud for a loudness jump: wait, then land on a beat
+        spawn = sinceSpawnSec >= STREAM_PLANET_SEC && chs.some((c) => c.triggered)
       } else {
         spawn = intensity > 0.2 && intensity > slowLoud * LOUD_JUMP
         slowLoud += (intensity - slowLoud) * Math.min(1, dt / 3)
