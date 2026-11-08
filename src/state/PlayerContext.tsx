@@ -15,8 +15,9 @@ import { LoadError } from '../net'
 import { useSettings } from './SettingsContext'
 import { loadFavorites, saveFavorites } from './settings'
 
-/** `sec` of 8 kHz 16-bit mono near-silence as a WAV: a ±3 LSB (≈ −80 dBFS) square wave.
- *  True digital silence won't do: Firefox only gives media keys to media it measures as audible. */
+/** `sec` (whole seconds) of 8 kHz 16-bit mono WAV: a 10 Hz sine at −40 dBFS. Firefox only gives
+ *  media keys to media it measures as audible, and ≈ −80 dBFS wasn't enough; 10 Hz is below
+ *  hearing and below what speakers reproduce. Whole cycles, so the loop joins without a click. */
 function quietWav(sec: number): Blob {
   const rate = 8000
   const n = rate * sec
@@ -36,8 +37,8 @@ function quietWav(sec: number): Blob {
   v.setUint16(34, 16, true) // bits per sample
   text(36, 'data')
   v.setUint32(40, n * 2, true)
-  // ponytail: the ±3 level is a guess at Firefox's audible threshold; raise it if keys still miss
-  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, i % 16 < 8 ? 3 : -3, true)
+  for (let i = 0; i < n; i++)
+    v.setInt16(44 + i * 2, Math.round(328 * Math.sin((2 * Math.PI * 10 * i) / rate)), true)
   return new Blob([v.buffer], { type: 'audio/wav' })
 }
 
@@ -300,7 +301,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [mode, engine])
 
   // Chrome only sends media keys to a tab playing an <audio>/<video>, and tracker and MIDI songs
-  // are Web Audio only: a near-silent looping element plays alongside so the keys come here, not to
+  // are Web Audio only: an inaudible looping element plays alongside so the keys come here, not to
   // another tab. Chrome ignores media shorter than ~5 s, hence 10 s.
   const keepAlive = useRef<HTMLAudioElement | null>(null)
   useEffect(() => {
