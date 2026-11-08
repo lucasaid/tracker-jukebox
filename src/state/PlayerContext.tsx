@@ -41,6 +41,8 @@ export interface PlayerApi {
   startJukebox(): Promise<void>
   next(): Promise<void> // jukebox mode only; no-op in single mode
   prev(): Promise<void>
+  /** Jukebox mode only (no-op in single mode): plays a random song from the jukebox filter, other than the current one, and stays in jukebox mode. */
+  random(): Promise<void>
 }
 
 const Ctx = createContext<PlayerApi | null>(null)
@@ -302,6 +304,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     async prev() {
       const q = queue.current
       if (mode === 'jukebox' && q) await playQueued(() => q.prev(), 0)
+    },
+    async random() {
+      if (mode !== 'jukebox') return
+      // A fresh pick per attempt, so a song that fails to load isn't retried.
+      const pick = (): string | null => {
+        const pool = jukeIds().filter((id) => id !== currentId)
+        return pool[Math.floor(Math.random() * pool.length)] ?? null
+      }
+      await playQueued(pick, 0)
     },
     async addLocal(file) {
       if (file.size > MAX_LOCAL_BYTES) throw new Error('File too large (max 16 MB)')

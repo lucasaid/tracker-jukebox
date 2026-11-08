@@ -31,6 +31,7 @@ export function PlayerBar() {
     mode,
     prev,
     next,
+    random,
     entries,
     play,
     favorites,
@@ -72,6 +73,7 @@ export function PlayerBar() {
       location.hash = formatRoute({ page: 'play', id, seek: null })
   }
   const playRandom = () => {
+    if (mode === 'jukebox') return void random()
     const pool = entries.filter((e) => e.id !== current?.id)
     const pick = pool[Math.floor(Math.random() * pool.length)]
     if (pick) playAndFollow(pick.id)

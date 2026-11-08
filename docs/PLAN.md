@@ -1026,6 +1026,8 @@ export interface PlayerApi {
   startJukebox(): Promise<void>
   next(): Promise<void> // jukebox mode only; no-op in single mode
   prev(): Promise<void>
+  /** Jukebox mode only (no-op in single mode): plays a random song from the jukebox filter, other than the current one, and stays in jukebox mode. */
+  random(): Promise<void>
 }
 export function PlayerProvider(props: { children: ReactNode }): JSX.Element
 export function usePlayer(): PlayerApi
@@ -1037,6 +1039,7 @@ export function usePlayer(): PlayerApi
 - P19: `favorites`, `toggleFavorite`, `addLocal`.
 - P20: `solo`.
 - P21: `startJukebox`, `next`, `prev`, and jukebox mode.
+- Post-plan (TODO.md): `random`.
 
 ### Storage
 
